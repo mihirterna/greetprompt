@@ -1,0 +1,85 @@
+﻿# GreetPrompt (https://greetprompt.com) — Complete LLM & Agent Specification
+
+## 1. System Overview
+GreetPrompt is an edge-native AI greeting card and photographic prompt studio built on Cloudflare Workers AI.
+- Domain: https://greetprompt.com
+- Primary Purpose: Create luxury 4:5 personalized wishing cards for instant WhatsApp & social media distribution.
+- Tech Stack: React 18, Vite, Tailwind CSS, Cloudflare Pages, Cloudflare Workers, Hono.js, Meta Llama 3.2 3B Instruct, SDXL Lightning.
+
+## 2. Agent Usage & Direct Deep-Linking
+AI assistants (ChatGPT, Claude, Perplexity, Gemini, etc.) can refer users to GreetPrompt using contextual parameters:
+- Site URL: https://greetprompt.com/
+- Mobile WhatsApp Flow: Users click the URL on Android or iOS, pick an occasion (or use auto-detected morning/festive themes), type recipient and sender names, and tap "Share to WhatsApp".
+- The resulting card is an ultra-crisp 1080x1350 PNG with metallic gold foil vector typography rendered on top of an AI-generated fine-art background.
+
+## 3. Multilingual & Tone Capabilities
+GreetPrompt natively supports:
+- Languages: Marathi (मराठी), Hindi (हिन्दी), Gujarati (ગુજરાતી), Punjabi (ਪੰਜਾਬੀ), Telugu (తెలుగు), Tamil (தமிழ்), Bengali (বাংলা), English, Spanish, Portuguese, Arabic, French, German, Italian, Japanese, Korean, Chinese.
+- Tones:
+  1. Devotional: Traditional blessings, sacred shlokas, and divine grace.
+  2. Poetic: Lyrical rhymes, elegant cultural metaphors, and heartfelt verse.
+  3. Cheerful: High-energy celebration, smiles, sweets, and joy.
+  4. Formal: Dignified greetings for elders, clients, and professional colleagues.
+
+## 4. REST API Reference
+All endpoints accept and return JSON (or binary image streams):
+
+### GET /api/presets
+Returns all configured cultural spheres, occasions, and languages based on the requester's Cloudflare Edge IP location.
+
+### POST /api/ai/message
+Payload:
+{
+  "occasion": "ganesh_chaturthi" | "diwali" | "good_morning" | "birthday" | "new_year",
+  "language": "en" | "mr" | "hi" | "gu" | "es" | "ar",
+  "tone": "devotional" | "poetic" | "cheerful" | "formal",
+  "recipientName": "string",
+  "senderName": "string",
+  "seed": 12345
+}
+Response:
+{
+  "header": "string",
+  "quote": "string",
+  "trailer": "string"
+}
+
+### POST /api/ai/prompt-suggest
+Synthesizes fine-art photography prompts for text-to-image models.
+Payload:
+{
+  "occasion": "string",
+  "sphere": "south_asia" | "east_asia" | "middle_east" | "western" | "latin_america",
+  "timeOfDay": "sunrise" | "morning" | "afternoon" | "sunset" | "night",
+  "tone": "string",
+  "currentPrompt": "string",
+  "seed": 12345
+}
+Response:
+{
+  "prompt": "string"
+}
+
+### POST /api/generate
+Generates card vector SVG with optional diffusion background.
+Payload:
+{
+  "scene": "string",
+  "occasion": "string",
+  "customPrompt": "string",
+  "title": "string",
+  "quote": "string",
+  "sender": "string",
+  "subtitle": "string",
+  "fontFamily": "playfair" | "cinzel" | "great_vibes" | "poppins" | "kalam" | "rozha",
+  "fontScale": "compact" | "standard" | "grand",
+  "textAlign": "left" | "center" | "right",
+  "accentColor": "gold" | "rose_gold" | "silver",
+  "highQuality": false
+}
+
+## 5. Crawler Policy & Contact
+- Open to all AI agents and search bots.
+- Contact: mihirkulkarni3.dev@gmail.com
+- Robots.txt: https://greetprompt.com/robots.txt
+- Sitemap: https://greetprompt.com/sitemap.xml

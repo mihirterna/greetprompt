@@ -1,0 +1,26 @@
+{
+  "name": "GreetPrompt — AI Wishing Cards Studio",
+  "short_name": "GreetPrompt",
+  "description": "Create personalized luxury AI wishing cards and scene prompts for WhatsApp in 1 click.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#070A10",
+  "theme_color": "#070A10",
+  "categories": ["lifestyle", "social", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

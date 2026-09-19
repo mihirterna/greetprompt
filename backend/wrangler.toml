@@ -1,0 +1,22 @@
+name = "cloudflare-wishes-api"
+main = "src/index.ts"
+compatibility_date = "2024-04-03"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Workers AI Binding
+[ai]
+binding = "AI"
+remote = true
+
+# Optional R2 Bucket Binding (enabled when user sets up R2; fallback to Edge Cache / stream when not configured)
+# [[r2_buckets]]
+# binding = "WISHES_BUCKET"
+# bucket_name = "cloudflare-wishes-images"
+# preview_bucket_name = "cloudflare-wishes-images-preview"
+
+# Environment Variables
+[vars]
+ENVIRONMENT = "development"
+DEFAULT_MODEL = "@cf/bytedance/stable-diffusion-xl-lightning"
+HD_MODEL = "@cf/stabilityai/stable-diffusion-xl-base-1.0"
+APP_NAME = "GreetPrompt"

@@ -1,0 +1,12 @@
+{
+  "name": "cloudflare-wishes-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build:frontend": "npm --prefix frontend run build",
+    "deploy:backend": "npm --prefix backend run deploy",
+    "deploy:frontend": "npx wrangler pages deploy frontend/dist --project-name=cloudflare-wishes"
+  }
+}

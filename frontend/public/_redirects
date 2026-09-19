@@ -1,0 +1,2 @@
+/api/* https://cloudflare-wishes-api.mihirkulkarni3-dev1165.workers.dev/api/:splat 200
+/* /index.html 200

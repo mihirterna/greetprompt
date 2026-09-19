@@ -1,0 +1,40 @@
+# GreetPrompt — AI Wishing Cards & Scene Prompt Studio
+
+> GreetPrompt (https://greetprompt.com) is a free, real-time AI wishing card creator and creative scene prompt engine running on Cloudflare Workers AI with Meta Llama 3.2 and SDXL Diffusion.
+
+## Overview
+GreetPrompt generates personalized, luxury greeting cards (4:5 Portrait, 1080x1350 px) formatted for 1-click WhatsApp sharing, Instagram, and social media. It features a zero-latency client-side vector SVG typography studio with metallic foil gradients (24K Gold, Rose Gold, Platinum Silver) and edge-accelerated AI prompt assistance.
+
+## Key Features & Tools
+- **1-Click Card Creation**: Instant personalized greeting cards with custom recipient and sender names.
+- **AI Blessing Crafter (Llama 3.2 3B)**: Culturally authentic blessings across 4 tones:
+  - *Devotional*: Sacred, reverent shlokas and divine grace (Ganesh Chaturthi, Diwali, Eid, Christmas).
+  - *Poetic*: Lyrical rhythm, elegant metaphors, and heartfelt verse.
+  - *Cheerful*: Joyful, energetic, and celebratory wishes with festive smiles.
+  - *Formal*: Respectful, dignified, and professional greetings for elders and colleagues.
+- **AI Scene Prompt Crafter**: Context-aware photographic scene prompts tailored to occasion, cultural sphere, time of day (Sunrise, Morning, Twilight, Night), and atmosphere.
+- **Dual-Engine Visuals**:
+  - *0ms Instant Curated Presets*: Bundled fine-art backgrounds (Shri Krishna Darshan, Royal Ganesha, Desi Kulhad Chai, Mount Fuji Sakura, Glowing Brass Diyas).
+  - *Custom AI Diffusion*: Sub-2-second edge diffusion using `@cf/bytedance/stable-diffusion-xl-lightning` and Ultra HD `@cf/stabilityai/stable-diffusion-xl-base-1.0`.
+- **Live Vector Typography Studio**: Real-time alignment (Left, Center, Right), font size (Compact, Standard, Grand), and metallic foil controls that update in 0ms without re-rendering the background image.
+
+## Supported Occasions
+- Ganesh Chaturthi (गणेशोत्सव / Vinayaka Chaturthi)
+- Diwali (दीपावली / Deepotsav / Festival of Lights)
+- Good Morning (Daily Chai, Sunrise, Sacred Darshan)
+- Navratri & Durga Puja (Garba, Dandiya, Divine Shakti)
+- Birthdays & Anniversaries (Luxury celebration cakes, champagne bokeh)
+- New Year & Milestone Celebrations
+
+## Supported Languages
+- Indic: Marathi (मराठी), Hindi (हिन्दी), Gujarati (ગુજરાતી), Punjabi (ਪੰਜਾਬੀ), Telugu (తెలుగు), Tamil (தமிழ்), Bengali (বাংলা), Hinglish.
+- Global: English, Spanish (Español), Portuguese (Português), Arabic (العربية), French (Français), German (Deutsch), Italian (Italiano), Japanese (日本語), Korean (한국어), Chinese (中文).
+
+## Public API Endpoints
+- `GET https://greetprompt.com/api/presets`: Returns available cultural spheres, occasions, languages, and curated scenes with edge IP geo-detection.
+- `POST https://greetprompt.com/api/ai/message`: Generates tone-aware greetings with Llama 3.2 (`{ occasion, language, tone, recipientName, senderName, seed }`).
+- `POST https://greetprompt.com/api/ai/prompt-suggest`: Synthesizes visual scene prompts for text-to-image models (`{ occasion, sphere, timeOfDay, tone, currentPrompt, seed }`).
+- `POST https://greetprompt.com/api/generate`: Generates vector SVG card with typography overlay and optional SDXL diffusion.
+
+## Full Documentation
+For complete technical specifications, see https://greetprompt.com/llms-full.txt
