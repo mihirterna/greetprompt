@@ -8,12 +8,12 @@ interface OccasionPickerProps {
 }
 
 const OCCASION_URL_PATHS: Record<string, string> = {
-  ganesh_chaturthi: '/ganesh-chaturthi',
-  diwali: '/diwali',
-  good_morning: '/good-morning',
-  birthday: '/birthday',
-  navratri: '/navratri',
-  new_year: '/new-year',
+  ganesh_chaturthi: '/ganesh-chaturthi/',
+  diwali: '/diwali/',
+  good_morning: '/good-morning/',
+  birthday: '/birthday/',
+  navratri: '/navratri/',
+  new_year: '/new-year/',
   gratitude: '/?occasion=gratitude',
   motivation: '/?occasion=motivation',
 };
@@ -68,12 +68,16 @@ export const OccasionPicker: React.FC<OccasionPickerProps> = ({
               key={occ.id}
               href={href}
               onClick={(e) => {
-                if (!e.metaKey && !e.ctrlKey) {
-                  e.preventDefault();
-                  onSelectOccasion(occ.id);
-                  if (window.history && window.location.pathname !== href) {
-                    window.history.pushState({}, '', href);
-                  }
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+                  return; // let the browser handle new-tab / window navigation
+                }
+                e.preventDefault();
+                onSelectOccasion(occ.id);
+                const currentUrl = window.location.pathname + window.location.search;
+                if (currentUrl !== href) {
+                  window.history.pushState({}, '', href);
+                  // Notify listeners so <title> / canonical follow the URL.
+                  window.dispatchEvent(new PopStateEvent('popstate'));
                 }
               }}
               className={`group relative p-3 rounded-2xl text-left transition-all border block ${

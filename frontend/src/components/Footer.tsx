@@ -1,12 +1,12 @@
 import React from 'react';
 
 const SEO_LINKS = [
-  { href: '/diwali', label: 'Diwali Wishes', icon: '🪔' },
-  { href: '/ganesh-chaturthi', label: 'Ganesh Chaturthi Cards', icon: '🌺' },
-  { href: '/good-morning', label: 'Good Morning Blessings', icon: '☀️' },
-  { href: '/birthday', label: 'Birthday Wishing Cards', icon: '🎂' },
-  { href: '/navratri', label: 'Navratri & Garba Greetings', icon: '💃' },
-  { href: '/new-year', label: 'New Year 2026 Wishes', icon: '🎆' },
+  { href: '/diwali/', label: 'Diwali Wishes', icon: '🪔' },
+  { href: '/ganesh-chaturthi/', label: 'Ganesh Chaturthi Cards', icon: '🌺' },
+  { href: '/good-morning/', label: 'Good Morning Blessings', icon: '☀️' },
+  { href: '/birthday/', label: 'Birthday Wishing Cards', icon: '🎂' },
+  { href: '/navratri/', label: 'Navratri & Garba Greetings', icon: '💃' },
+  { href: '/new-year/', label: 'New Year 2026 Wishes', icon: '🎆' },
 ];
 
 export const Footer: React.FC = () => {
