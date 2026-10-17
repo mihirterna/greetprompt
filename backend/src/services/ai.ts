@@ -140,7 +140,6 @@ export async function generateAiMessage(
   const tone = req.tone || 'devotional';
   const recipient = req.recipientName?.trim() || '';
   const sender = req.senderName?.trim() || '';
-  const randomSeed = req.seed || Math.floor(Math.random() * 100000);
 
   const toneInstructions: Record<string, string> = {
     devotional: 'Sacred, reverent, and spiritual blessings, invoking divine grace, peace, and sacred mantras/shlokas.',

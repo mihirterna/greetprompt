@@ -15,6 +15,7 @@ import {
   OccasionDefinition,
   SceneDefinition,
 } from '../types';
+import { embedFontsInSvg } from '../services/svgFontEmbed';
 
 interface CardPreviewProps {
   request: CardRequest;
@@ -323,6 +324,9 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
     if (!svgString) return null;
 
     svgString = await inlineSvgImages(svgString);
+
+    // Inline the card fonts so the rasterized PNG keeps the real typography.
+    svgString = await embedFontsInSvg(svgString);
 
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');

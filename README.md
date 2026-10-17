@@ -42,15 +42,21 @@ greetprompt/
 └── frontend/                      # Cloudflare Pages React App
     ├── src/
     │   ├── components/            # OccasionPicker, ScenePicker, SmartPromptInput, CardPreview, VibePicker
+    │   ├── services/              # localCopilotEngine, svgFontEmbed (font-safe PNG export)
     │   ├── App.tsx                # Adaptive time-of-day defaults, deep-linking state, 60fps card canvas
+    │   ├── seo.ts                 # URL-driven <title>/canonical sync (never form-state driven)
     │   └── types.ts
+    ├── seo.config.json            # Single source of truth for landing-page titles/descriptions
+    ├── scripts/
+    │   ├── generatePrerenderedPages.js  # Builds dist/<slug>/index.html with unique SEO meta
+    │   └── pingIndexNow.cjs       # IndexNow / Bing instant indexing ping
     ├── public/
     │   ├── icon.svg               # Luxury PWA vector icon
     │   ├── manifest.json          # PWA manifest
     │   ├── sw.js                  # Service Worker with edge pre-caching
     │   ├── llms.txt               # LLM and AI agent documentation
     │   └── scenes/                # Curated studio visual scenes
-    ├── functions/api/[[path]].ts  # Cloudflare Pages API proxy to Workers
+    ├── functions/api/[[path]].ts  # Cloudflare Pages API proxy to Workers (API_WORKER_URL)
     ├── vite.config.ts             # Vite build configuration
     └── package.json
 ```
@@ -79,6 +85,12 @@ npm run dev
 # Frontend starts at http://localhost:5173 (proxies /api to local worker)
 ```
 
+> SEO note: landing pages (`/diwali/`, `/good-morning/`, …) are defined once in
+> [`frontend/seo.config.json`](frontend/seo.config.json). `npm run build` generates
+> the prerendered `dist/<slug>/index.html` pages from that file via
+> `frontend/scripts/generatePrerenderedPages.js`. Keep all internal links,
+> canonicals and the sitemap on the trailing-slash URLs.
+
 ---
 
 ## 🌐 Deployment to Cloudflare
@@ -89,13 +101,17 @@ cd backend
 npm run typecheck
 npx wrangler deploy
 ```
+Optional: add an `ALLOWED_ORIGINS` comma-separated variable in `wrangler.toml`
+to extend the CORS allowlist (defaults cover `greetprompt.com` + localhost dev).
 
 ### Deploy Frontend (Cloudflare Pages)
 ```bash
 cd frontend
-npm run build
+npm run build                       # tsc + vite build + prerendered landing pages
 npx wrangler pages deploy dist --project-name cloudflare-wishes
 ```
+Optional: set the `API_WORKER_URL` variable in the Pages project to point the
+`/api/*` proxy at a different Worker (defaults to the current production API).
 
 ---
 
