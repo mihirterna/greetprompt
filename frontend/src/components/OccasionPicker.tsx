@@ -7,6 +7,17 @@ interface OccasionPickerProps {
   onSelectOccasion: (id: OccasionId) => void;
 }
 
+const OCCASION_URL_PATHS: Record<string, string> = {
+  ganesh_chaturthi: '/ganesh-chaturthi',
+  diwali: '/diwali',
+  good_morning: '/good-morning',
+  birthday: '/birthday',
+  navratri: '/navratri',
+  new_year: '/new-year',
+  gratitude: '/?occasion=gratitude',
+  motivation: '/?occasion=motivation',
+};
+
 export const OccasionPicker: React.FC<OccasionPickerProps> = ({
   occasions,
   selectedOccasion,
@@ -46,16 +57,26 @@ export const OccasionPicker: React.FC<OccasionPickerProps> = ({
         ))}
       </div>
 
-      {/* Occasions Grid */}
+      {/* Occasions Grid with Crawlable <a> Links */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {filteredOccasions.map((occ) => {
           const isSelected = selectedOccasion === occ.id;
+          const href = OCCASION_URL_PATHS[occ.id] || `/?occasion=${occ.id}`;
+
           return (
-            <button
+            <a
               key={occ.id}
-              type="button"
-              onClick={() => onSelectOccasion(occ.id)}
-              className={`group relative p-3 rounded-2xl text-left transition-all border ${
+              href={href}
+              onClick={(e) => {
+                if (!e.metaKey && !e.ctrlKey) {
+                  e.preventDefault();
+                  onSelectOccasion(occ.id);
+                  if (window.history && window.location.pathname !== href) {
+                    window.history.pushState({}, '', href);
+                  }
+                }
+              }}
+              className={`group relative p-3 rounded-2xl text-left transition-all border block ${
                 isSelected
                   ? 'bg-amber-500/20 border-amber-400 shadow-md shadow-amber-500/10 ring-1 ring-amber-400/40 scale-[1.01]'
                   : 'bg-slate-900/60 border-white/10 hover:border-white/20 hover:bg-slate-900/90'
@@ -76,7 +97,7 @@ export const OccasionPicker: React.FC<OccasionPickerProps> = ({
               <span className="text-[11px] text-slate-400 line-clamp-1 block">
                 {occ.scenes?.length || 1} curated themes
               </span>
-            </button>
+            </a>
           );
         })}
       </div>

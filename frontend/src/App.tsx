@@ -827,9 +827,55 @@ export const App: React.FC = () => {
     loadPresets();
   }, []);
 
+  // Sync document.title and canonical URL with current occasion
+  useEffect(() => {
+    const OCCASION_SEO: Record<string, { title: string; path: string }> = {
+      ganesh_chaturthi: {
+        title: 'Ganesh Chaturthi AI Wishing Cards & Bappa Images — GreetPrompt',
+        path: '/ganesh-chaturthi',
+      },
+      diwali: {
+        title: 'Diwali AI Wishing Cards & Deepavali Greetings — GreetPrompt',
+        path: '/diwali',
+      },
+      good_morning: {
+        title: 'Good Morning AI Wishing Cards & Daily Blessings — GreetPrompt',
+        path: '/good-morning',
+      },
+      birthday: {
+        title: 'Birthday AI Wishing Cards & Luxury Celebration Greetings — GreetPrompt',
+        path: '/birthday',
+      },
+      navratri: {
+        title: 'Navratri & Garba AI Wishing Cards — GreetPrompt',
+        path: '/navratri',
+      },
+      new_year: {
+        title: 'New Year 2026 AI Wishing Cards & Fireworks — GreetPrompt',
+        path: '/new-year',
+      },
+    };
+
+    const seo = OCCASION_SEO[request.occasion];
+    if (seo) {
+      document.title = seo.title;
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) {
+        canonicalEl.setAttribute('href', `https://greetprompt.com${seo.path}`);
+      }
+    } else {
+      document.title = 'GreetPrompt — Free AI Wishing Cards & Scene Prompt Studio';
+      const canonicalEl = document.querySelector('link[rel="canonical"]');
+      if (canonicalEl) {
+        canonicalEl.setAttribute('href', 'https://greetprompt.com/');
+      }
+    }
+  }, [request.occasion]);
+
   const currentOccasion = occasions.find((o) => o.id === request.occasion) || occasions[0];
   const currentScene =
     currentOccasion.scenes.find((s) => s.id === request.sceneId) || currentOccasion.scenes[0];
+
 
   const currentLangObj = languages.find((l) => l.id === request.language) || languages[0];
   const activeSphereObj = spheres.find((s) => s.id === currentSphere) || spheres[0];
