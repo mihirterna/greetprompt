@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
 import { SITE_URL, getSeoForPath } from './seo';
+import { NAVIGATE_EVENT } from './events';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { AccordionStep } from './components/AccordionStep';
@@ -845,7 +846,11 @@ export const App: React.FC = () => {
 
     syncMeta();
     window.addEventListener('popstate', syncMeta);
-    return () => window.removeEventListener('popstate', syncMeta);
+    window.addEventListener(NAVIGATE_EVENT, syncMeta);
+    return () => {
+      window.removeEventListener('popstate', syncMeta);
+      window.removeEventListener(NAVIGATE_EVENT, syncMeta);
+    };
   }, []);
 
   const currentOccasion = occasions.find((o) => o.id === request.occasion) || occasions[0];
@@ -892,9 +897,13 @@ export const App: React.FC = () => {
 
   // Restore occasion state when the user navigates Back/Forward between deep links.
   useEffect(() => {
-    const onPopState = () => popStateRef.current();
-    window.addEventListener('popstate', onPopState);
-    return () => window.removeEventListener('popstate', onPopState);
+    const handleUrlNavigation = () => popStateRef.current();
+    window.addEventListener('popstate', handleUrlNavigation);
+    window.addEventListener(NAVIGATE_EVENT, handleUrlNavigation);
+    return () => {
+      window.removeEventListener('popstate', handleUrlNavigation);
+      window.removeEventListener(NAVIGATE_EVENT, handleUrlNavigation);
+    };
   }, []);
 
   const handleSelectScene = (sceneId: string) => {

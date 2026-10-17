@@ -9,6 +9,7 @@ import {
   LanguageInfo,
   AiMessageRequest,
   AiPromptSuggestRequest,
+  MessageTone,
 } from './types';
 import { OCCASIONS, SCENES, ALL_LANGUAGES, CULTURAL_SPHERES } from './templates/scenes';
 import { generateBackgroundArt, generateAiMessage, suggestImagePrompt } from './services/ai';
@@ -29,8 +30,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
 
 function isAllowedOrigin(origin: string, env: Env): boolean {
   if (DEFAULT_ALLOWED_ORIGINS.includes(origin)) return true;
-  // Cloudflare Pages preview / branch deployments.
-  if (/^https:\/\/[a-z0-9-]+\.pages\.dev$/.test(origin)) return true;
+  // Cloudflare Pages preview / branch deployments. Preview URLs are
+  // <hash>.<project>.pages.dev (two labels); the direct alias is
+  // <project>.pages.dev (one label) — allow both shapes.
+  if (/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)?\.pages\.dev$/.test(origin)) return true;
 
   const extra = (env.ALLOWED_ORIGINS || '')
     .split(',')
@@ -64,6 +67,21 @@ function clampText(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, maxLength) : undefined;
+}
+
+// `tone` is interpolated verbatim into LLM prompts ("Write a ${tone} wish…",
+// "Mood: ${tone}"). The field is a string union in the types, but request
+// bodies are unvalidated at runtime, so restrict it to the known set instead
+// of letting arbitrary text through. Unknown values fall back to the existing
+// 'devotional' default at the prompt layer.
+const MESSAGE_TONES = ['devotional', 'poetic', 'cheerful', 'formal'] as const;
+
+function sanitizeTone(value: unknown): MessageTone | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return (MESSAGE_TONES as readonly string[]).includes(trimmed)
+    ? (trimmed as MessageTone)
+    : undefined;
 }
 
 // Map Country Code & Query to Cultural Sphere
@@ -248,6 +266,7 @@ app.post('/api/ai/message', async (c) => {
       ...body,
       recipientName: clampText(body.recipientName, TEXT_LIMITS.recipientName),
       senderName: clampText(body.senderName, TEXT_LIMITS.senderName),
+      tone: sanitizeTone(body.tone),
     };
     const result = await generateAiMessage(sanitized, c.env);
     return c.json(result);
@@ -271,6 +290,7 @@ app.post('/api/ai/prompt-suggest', async (c) => {
     const sanitized: AiPromptSuggestRequest = {
       ...body,
       currentPrompt: clampText(body.currentPrompt, TEXT_LIMITS.customImagePrompt),
+      tone: sanitizeTone(body.tone),
     };
     const result = await suggestImagePrompt(sanitized, c.env);
     return c.json(result);
@@ -388,6 +408,8 @@ app.get('/api/images/:key', async (c) => {
     headers: {
       'Content-Type': image.contentType,
       'Cache-Control': 'public, max-age=31536000, immutable',
+      // Intentionally open like a CDN edge: these are public, immutable,
+      // generated assets and third-party embeds fetch them cross-origin.
       'Access-Control-Allow-Origin': '*',
       'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy':

@@ -39,7 +39,7 @@ function buildPage(slug, page) {
   const canonical = `${SITE_URL}/${slug}/`;
   const title = escapeHtml(page.title);
   const description = escapeHtml(page.description);
-  const image = page.image;
+  const image = escapeHtml(page.image);
 
   let html = template;
 

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { OccasionDefinition, OccasionId } from '../types';
+import { NAVIGATE_EVENT } from '../events';
 
 interface OccasionPickerProps {
   occasions: OccasionDefinition[];
@@ -76,8 +77,9 @@ export const OccasionPicker: React.FC<OccasionPickerProps> = ({
                 const currentUrl = window.location.pathname + window.location.search;
                 if (currentUrl !== href) {
                   window.history.pushState({}, '', href);
-                  // Notify listeners so <title> / canonical follow the URL.
-                  window.dispatchEvent(new PopStateEvent('popstate'));
+                  // Namespaced event so in-app listeners (title/canonical
+                  // sync, state restore) react without faking `popstate`.
+                  window.dispatchEvent(new Event(NAVIGATE_EVENT));
                 }
               }}
               className={`group relative p-3 rounded-2xl text-left transition-all border block ${
