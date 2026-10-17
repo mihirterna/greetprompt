@@ -1,0 +1,68 @@
+# Pull-request and main-branch checks: typecheck, full frontend build
+# (including prerendered landing pages) with SEO verification, and a
+# backend Worker bundle dry-run. No deploy happens here.
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend — typecheck, build, SEO verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+      - name: Build (vite + prerendered landing pages)
+        working-directory: frontend
+        run: npm run build
+      - name: Verify prerendered SEO output
+        working-directory: frontend
+        run: node scripts/verifyBuild.js
+
+  backend:
+    name: Backend — typecheck, wrangler dry-run
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Typecheck
+        working-directory: backend
+        run: npm run typecheck
+      - name: Validate Worker bundle (dry-run)
+        working-directory: backend
+        run: npx wrangler deploy --dry-run

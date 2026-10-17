@@ -28,6 +28,9 @@ Powered by **Cloudflare Workers**, **Workers AI (Meta Llama 3.1 8B & Stable Diff
 
 ```
 greetprompt/
+├── .github/
+│   ├── workflows/                 # ci.yml (checks) + deploy-backend.yml (Worker deploy)
+│   └── dependabot.yml             # Grouped npm + Actions dependency updates
 ├── backend/                       # Cloudflare Worker API
 │   ├── src/
 │   │   ├── index.ts               # Hono router (/api/ai/message, /api/ai/prompt-suggest, /api/presets, /api/generate)
@@ -49,6 +52,7 @@ greetprompt/
     ├── seo.config.json            # Single source of truth for landing-page titles/descriptions
     ├── scripts/
     │   ├── generatePrerenderedPages.js  # Builds dist/<slug>/index.html with unique SEO meta
+    │   ├── verifyBuild.js         # CI check: titles/canonicals/sitemap match seo.config.json
     │   └── pingIndexNow.cjs       # IndexNow / Bing instant indexing ping
     ├── public/
     │   ├── icon.svg               # Luxury PWA vector icon
@@ -112,6 +116,51 @@ npx wrangler pages deploy dist --project-name cloudflare-wishes
 ```
 Optional: set the `API_WORKER_URL` variable in the Pages project to point the
 `/api/*` proxy at a different Worker (defaults to the current production API).
+
+---
+
+## 🔁 CI/CD (GitHub Actions)
+
+Pipelines live in [`.github/workflows/`](.github/workflows):
+
+| Workflow | Trigger | What it does |
+| --- | --- | --- |
+| [`ci.yml`](.github/workflows/ci.yml) | PRs + pushes to `main` | **Frontend**: `tsc`, `vite build` + prerendered landing pages, then `scripts/verifyBuild.js` asserts every title/canonical/OG tag and the sitemap match `seo.config.json`. **Backend**: `tsc` + `wrangler deploy --dry-run`. |
+| [`deploy-backend.yml`](.github/workflows/deploy-backend.yml) | pushes to `main` touching `backend/**` | Deploys the Worker with `cloudflare/wrangler-action`. Skipped until enabled (below). |
+| [`dependabot.yml`](.github/dependabot.yml) | weekly | Grouped npm (frontend + backend) and GitHub Actions update PRs. |
+
+Local equivalents:
+
+```bash
+cd frontend && npm run build && npm run verify
+cd backend  && npm run typecheck && npx wrangler deploy --dry-run
+```
+
+### Enable the automated backend deploy
+
+```bash
+# 1. Create an API token: https://dash.cloudflare.com/profile/api-tokens
+#    (template: "Edit Cloudflare Workers", or custom with Account → Workers Scripts → Edit)
+# 2. Store it and your account ID as repo secrets, then flip the switch:
+gh secret set CLOUDFLARE_API_TOKEN  --repo mihirterna/greetprompt
+gh secret set CLOUDFLARE_ACCOUNT_ID --repo mihirterna/greetprompt
+gh variable set CLOUDFLARE_DEPLOY_ENABLED --body true --repo mihirterna/greetprompt
+```
+
+Until the `CLOUDFLARE_DEPLOY_ENABLED` variable is set, `deploy-backend.yml`
+skips cleanly and manual `npx wrangler deploy` stays the workflow of record.
+
+### Connect the frontend to Cloudflare Pages (one-time, no tokens)
+
+> Cloudflare dashboard → **Workers & Pages → `cloudflare-wishes` → Settings →
+> Build** → connect Git → repository `mihirterna/greetprompt`, production branch
+> `main`, root directory `frontend`, build command `npm run build`, output
+> directory `dist`, environment variable `NODE_VERSION=22` (plus `API_WORKER_URL`
+> if the `/api/*` proxy should target a non-default Worker).
+
+After connecting, every push to `main` deploys production and every PR gets its
+own preview URL automatically. Recommended once CI is green: enable branch
+protection on `main` requiring the two `ci.yml` jobs.
 
 ---
 

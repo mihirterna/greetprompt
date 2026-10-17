@@ -1,0 +1,55 @@
+# Deploys the backend Cloudflare Worker (cloudflare-wishes-api) on pushes to
+# main that touch backend/**. Skipped until the deploy is explicitly enabled,
+# so manual `wrangler deploy` remains the workflow of record until then.
+#
+# To enable:
+#   1. Create a Cloudflare API token (Account → Workers Scripts → Edit) and
+#      store it as the repository secret CLOUDFLARE_API_TOKEN.
+#   2. Store the account ID as the repository secret CLOUDFLARE_ACCOUNT_ID.
+#   3. Set the repository variable CLOUDFLARE_DEPLOY_ENABLED=true.
+name: Deploy backend (Worker)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - .github/workflows/deploy-backend.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy cloudflare-wishes-api
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: vars.CLOUDFLARE_DEPLOY_ENABLED == 'true'
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Typecheck
+        working-directory: backend
+        run: npm run typecheck
+      - name: Deploy with Wrangler
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: backend
+          command: deploy
