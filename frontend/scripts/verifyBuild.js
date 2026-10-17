@@ -56,6 +56,13 @@ if (rootHtml) {
   checkValue('root title', rootHtml, /<title>([^<]*)<\/title>/, seoConfig.default.title);
   checkValue('root canonical', rootHtml, /<link rel="canonical" href="([^"]*)"/, rootCanonical);
   checkValue('root og:url', rootHtml, /<meta property="og:url" content="([^"]*)"/, rootCanonical);
+  checkValue('root og:title', rootHtml, /<meta property="og:title" content="([^"]*)"/, seoConfig.default.title);
+  checkValue(
+    'root og:description',
+    rootHtml,
+    /<meta property="og:description" content="([^"]*)"/,
+    seoConfig.default.description
+  );
 }
 
 // --- Landing pages from the shared config ----------------------------------

@@ -35,6 +35,9 @@ jobs:
         working-directory: frontend
         run: npm ci
       - name: Typecheck
+        # Deliberately duplicated by the build's own tsc pass below: this gives
+        # a clearly-labeled early failure at negligible cost and mirrors the
+        # backend job's explicit Typecheck step.
         working-directory: frontend
         run: npx tsc --noEmit
       - name: Build (vite + prerendered landing pages)

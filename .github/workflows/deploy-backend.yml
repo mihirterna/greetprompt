@@ -30,6 +30,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     if: vars.CLOUDFLARE_DEPLOY_ENABLED == 'true'
+    # GitHub auto-creates the 'production' environment on first run. If it
+    # later gets its own secrets/variables they shadow the repo-level
+    # CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID set per the README, and
+    # env-level required reviewers (if added) would queue deploys while the
+    # run still looks green. Document before adding either.
     environment: production
     steps:
       - name: Checkout
