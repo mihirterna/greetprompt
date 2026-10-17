@@ -1,2 +1,7 @@
+# API requests are proxied by frontend/functions/api/[[path]].ts
+# (set the API_WORKER_URL variable there to change the upstream Worker).
+# This static rule is a fallback for projects without Pages Functions enabled.
 /api/* https://cloudflare-wishes-api.mihirkulkarni3-dev1165.workers.dev/api/:splat 200
+
+# SPA fallback for single-page routes (deep links use query params on /).
 /* /index.html 200

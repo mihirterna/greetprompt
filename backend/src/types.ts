@@ -178,6 +178,7 @@ export interface Env {
   DEFAULT_MODEL?: string;
   HD_MODEL?: string;
   APP_NAME?: string;
+  ALLOWED_ORIGINS?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
 }

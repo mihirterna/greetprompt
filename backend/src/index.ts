@@ -17,16 +17,54 @@ import { saveCardImage, getCardImage } from './services/storage';
 
 const app = new Hono<{ Bindings: Env }>();
 
-// Enable CORS for all frontend origins
+// Browser origins permitted to call the API directly. Extend with the
+// ALLOWED_ORIGINS comma-separated variable to add custom domains.
+const DEFAULT_ALLOWED_ORIGINS = [
+  'https://greetprompt.com',
+  'https://www.greetprompt.com',
+  'http://localhost:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:5173',
+];
+
+function isAllowedOrigin(origin: string, env: Env): boolean {
+  if (DEFAULT_ALLOWED_ORIGINS.includes(origin)) return true;
+  // Cloudflare Pages preview / branch deployments.
+  if (/^https:\/\/[a-z0-9-]+\.pages\.dev$/.test(origin)) return true;
+
+  const extra = (env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return extra.includes(origin);
+}
+
+// Restrict cross-origin browser access to known frontends instead of `*`.
 app.use(
   '*',
   cors({
-    origin: '*',
+    origin: (origin, c) => (origin && isAllowedOrigin(origin, c.env) ? origin : undefined),
     allowMethods: ['GET', 'POST', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization'],
     maxAge: 86400,
   })
 );
+
+// User-supplied text limits (also bounded in the UI) to keep prompts sane.
+const TEXT_LIMITS = {
+  customTitle: 160,
+  customQuote: 800,
+  customSubtitle: 160,
+  recipientName: 80,
+  senderName: 80,
+  customImagePrompt: 500,
+} as const;
+
+function clampText(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : undefined;
+}
 
 // Map Country Code & Query to Cultural Sphere
 function detectCulturalSphere(countryCode: string, querySphere?: string): CulturalSphere {
@@ -202,25 +240,16 @@ app.get('/api/presets', (c) => {
   });
 });
 
-// AI Debug Endpoint
-app.get('/api/test-ai-raw', async (c) => {
-  const model = c.req.query('model') || '@cf/meta/llama-3.2-3b-instruct';
-  try {
-    const res: any = await c.env.AI.run(model, {
-      prompt: 'Write a 2-line devotional greeting for Ganesh Chaturthi in English.',
-      max_tokens: 100,
-    });
-    return c.json({ success: true, model, res });
-  } catch (err: any) {
-    return c.json({ success: false, model, error: err?.message });
-  }
-});
-
 // AI Greeting Message Generation (Llama 3.1 8B)
 app.post('/api/ai/message', async (c) => {
   try {
     const body = await c.req.json<AiMessageRequest>();
-    const result = await generateAiMessage(body, c.env);
+    const sanitized: AiMessageRequest = {
+      ...body,
+      recipientName: clampText(body.recipientName, TEXT_LIMITS.recipientName),
+      senderName: clampText(body.senderName, TEXT_LIMITS.senderName),
+    };
+    const result = await generateAiMessage(sanitized, c.env);
     return c.json(result);
   } catch (err: any) {
     console.error('Error generating AI message:', err);
@@ -239,7 +268,11 @@ app.post('/api/ai/message', async (c) => {
 app.post('/api/ai/prompt-suggest', async (c) => {
   try {
     const body = await c.req.json<AiPromptSuggestRequest>();
-    const result = await suggestImagePrompt(body, c.env);
+    const sanitized: AiPromptSuggestRequest = {
+      ...body,
+      currentPrompt: clampText(body.currentPrompt, TEXT_LIMITS.customImagePrompt),
+    };
+    const result = await suggestImagePrompt(sanitized, c.env);
     return c.json(result);
   } catch (err: any) {
     console.error('Error suggesting prompt:', err);
@@ -258,34 +291,45 @@ app.post('/api/generate', async (c) => {
   try {
     const body = await c.req.json<CardRequest>();
 
-    if (!body.occasion || !body.sceneId) {
-      return c.json({ error: 'Missing required fields: occasion and sceneId are mandatory' }, 400);
+    if (!body.occasion || !body.sceneId || !OCCASIONS[body.occasion]) {
+      return c.json({ error: 'Invalid request: a known occasion and a sceneId are mandatory' }, 400);
     }
+
+    const sanitized: CardRequest = {
+      ...body,
+      sceneId: String(body.sceneId).slice(0, 64),
+      customTitle: clampText(body.customTitle, TEXT_LIMITS.customTitle),
+      customQuote: clampText(body.customQuote, TEXT_LIMITS.customQuote),
+      customSubtitle: clampText(body.customSubtitle, TEXT_LIMITS.customSubtitle),
+      recipientName: clampText(body.recipientName, TEXT_LIMITS.recipientName),
+      senderName: clampText(body.senderName, TEXT_LIMITS.senderName),
+      customImagePrompt: clampText(body.customImagePrompt, TEXT_LIMITS.customImagePrompt),
+    };
 
     const cardId = `wish_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
     // 1. Generate or fetch AI Background Art
-    const background = await generateBackgroundArt(body, c.env);
+    const background = await generateBackgroundArt(sanitized, c.env);
 
     // 2. Render Edge Vector Card with Dynamic Multi-script Typography & RTL support
     const svgContent = generateCardSvg({
-      request: body,
+      request: sanitized,
       bgDataUrl: background.base64DataUrl,
     });
 
     // 3. Persist to Storage (R2 / Edge Cache)
     const imageUrl = await saveCardImage(cardId, svgContent, c.env);
 
-    const occasionDef = OCCASIONS[body.occasion] || OCCASIONS.good_morning;
-    const lang = body.language || 'en';
+    const occasionDef = OCCASIONS[sanitized.occasion] || OCCASIONS.good_morning;
+    const lang = sanitized.language || 'en';
     const title =
-      body.customTitle ||
+      sanitized.customTitle ||
       occasionDef.defaultTitle[lang] ||
       occasionDef.defaultTitle.en ||
       occasionDef.label;
 
     const quote =
-      body.customQuote ||
+      sanitized.customQuote ||
       occasionDef.sampleQuotes[lang]?.[0] ||
       occasionDef.sampleQuotes.en?.[0] ||
       'Wishing you peace and joy.';
@@ -295,18 +339,18 @@ app.post('/api/generate', async (c) => {
       imageUrl,
       svgContent,
       promptUsed: background.promptUsed,
-      occasion: body.occasion,
-      sceneId: body.sceneId,
-      sphere: body.sphere,
-      backgroundMode: body.backgroundMode || 'preset',
-      recipientName: body.recipientName,
-      senderName: body.senderName,
+      occasion: sanitized.occasion,
+      sceneId: sanitized.sceneId,
+      sphere: sanitized.sphere,
+      backgroundMode: sanitized.backgroundMode || 'preset',
+      recipientName: sanitized.recipientName,
+      senderName: sanitized.senderName,
       quote,
       title,
-      subtitle: body.customSubtitle || '✨ WISHING YOU JOY, PEACE & BLESSINGS ✨',
-      textAlignment: body.textAlignment || 'center',
-      textSize: body.textSize || 'standard',
-      foilAccent: body.foilAccent || 'gold',
+      subtitle: sanitized.customSubtitle || '✨ WISHING YOU JOY, PEACE & BLESSINGS ✨',
+      textAlignment: sanitized.textAlignment || 'center',
+      textSize: sanitized.textSize || 'standard',
+      foilAccent: sanitized.foilAccent || 'gold',
       createdAt: new Date().toISOString(),
       aspectRatio: '4:5',
       fromCache: background.isMock,
@@ -328,6 +372,12 @@ app.post('/api/generate', async (c) => {
 // Image serving endpoint with CDN caching headers
 app.get('/api/images/:key', async (c) => {
   const key = c.req.param('key');
+
+  // Only serve SVG cards this API itself generates.
+  if (!/^wish_[0-9]+_[a-z0-9]+\.svg$/i.test(key)) {
+    return c.text('Image not found', 404);
+  }
+
   const image = await getCardImage(key, c.env);
 
   if (!image) {
@@ -339,6 +389,9 @@ app.get('/api/images/:key', async (c) => {
       'Content-Type': image.contentType,
       'Cache-Control': 'public, max-age=31536000, immutable',
       'Access-Control-Allow-Origin': '*',
+      'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy':
+        "default-src 'none'; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com",
     },
   });
 });
