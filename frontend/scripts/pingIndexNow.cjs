@@ -7,12 +7,12 @@ const data = JSON.stringify({
   keyLocation: 'https://greetprompt.com/8e2f9d6b4a1c5e3f7a9b0c2d4e6f8a1b.txt',
   urlList: [
     'https://greetprompt.com/',
-    'https://greetprompt.com/ganesh-chaturthi',
-    'https://greetprompt.com/diwali',
-    'https://greetprompt.com/good-morning',
-    'https://greetprompt.com/birthday',
-    'https://greetprompt.com/navratri',
-    'https://greetprompt.com/new-year',
+    'https://greetprompt.com/ganesh-chaturthi/',
+    'https://greetprompt.com/diwali/',
+    'https://greetprompt.com/good-morning/',
+    'https://greetprompt.com/birthday/',
+    'https://greetprompt.com/navratri/',
+    'https://greetprompt.com/new-year/',
     'https://greetprompt.com/llms.txt',
     'https://greetprompt.com/llms-full.txt',
     'https://greetprompt.com/sitemap.xml'

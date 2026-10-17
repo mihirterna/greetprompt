@@ -6,6 +6,9 @@ export default {
   ],
   theme: {
     extend: {
+      screens: {
+        xs: '480px',
+      },
       colors: {
         brand: {
           50: '#fffbeb',
@@ -37,9 +40,22 @@ export default {
         quote: ['"Kalam"', 'cursive'],
         sans: ['"Poppins"', 'sans-serif'],
       },
+      keyframes: {
+        fadeIn: {
+          from: { opacity: '0', transform: 'translateY(4px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleUp: {
+          from: { opacity: '0', transform: 'scale(0.95)' },
+          to: { opacity: '1', transform: 'scale(1)' },
+        },
+      },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'spin-slow': 'spin 12s linear infinite',
+        fadeIn: 'fadeIn 0.3s ease-out',
+        'fade-in': 'fadeIn 0.3s ease-out',
+        'scale-up': 'scaleUp 0.25s ease-out',
       }
     },
   },

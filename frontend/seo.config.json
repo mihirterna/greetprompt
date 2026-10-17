@@ -1,0 +1,45 @@
+{
+  "siteUrl": "https://greetprompt.com",
+  "default": {
+    "title": "GreetPrompt — Free AI Wishing Cards & Scene Prompt Studio",
+    "description": "Create personalized luxury greeting cards and visual AI scene prompts with 24K gold typography in 15+ languages. 1-Click WhatsApp HD sharing."
+  },
+  "landingPages": {
+    "ganesh-chaturthi": {
+      "title": "Ganesh Chaturthi AI Wishing Cards & Bappa Images — GreetPrompt",
+      "description": "Create personalized luxury Ganesh Chaturthi wishing cards with divine Lord Ganesha scenes, modaks, and Hindi/Marathi typography for WhatsApp.",
+      "image": "https://greetprompt.com/scenes/ganesha_royal.jpg",
+      "aliases": ["ganeshchaturthi", "ganpati"]
+    },
+    "diwali": {
+      "title": "Diwali AI Wishing Cards & Deepavali Greetings — GreetPrompt",
+      "description": "Create personalized luxury Diwali greeting cards with royal palace deepotsav, golden diyas, and 24K gold typography for WhatsApp.",
+      "image": "https://greetprompt.com/scenes/diwali_palace.jpg",
+      "aliases": ["deepavali"]
+    },
+    "good-morning": {
+      "title": "Good Morning AI Wishing Cards & Daily Blessings — GreetPrompt",
+      "description": "Generate personalized Good Morning wishing cards with divine Krishna, sunrise, and chai themes for WhatsApp status & direct share.",
+      "image": "https://greetprompt.com/scenes/gm_krishna.jpg",
+      "aliases": ["morning"]
+    },
+    "birthday": {
+      "title": "Birthday AI Wishing Cards & Luxury Celebration Greetings — GreetPrompt",
+      "description": "Create personalized birthday greeting cards with gourmet celebration cakes, warm candles, and gold foil typography for WhatsApp.",
+      "image": "https://greetprompt.com/scenes/bday_cake.jpg",
+      "aliases": []
+    },
+    "navratri": {
+      "title": "Navratri & Garba AI Wishing Cards — GreetPrompt",
+      "description": "Design divine Navratri and Durga Puja wishing cards with vibrant garba raas and gold typography for WhatsApp.",
+      "image": "https://greetprompt.com/scenes/navratri_garba.jpg",
+      "aliases": []
+    },
+    "new-year": {
+      "title": "New Year 2026 AI Wishing Cards & Fireworks — GreetPrompt",
+      "description": "Generate personalized Happy New Year 2026 cards with golden fireworks and luxury typography for WhatsApp.",
+      "image": "https://greetprompt.com/scenes/newyear_gold.jpg",
+      "aliases": ["newyear"]
+    }
+  }
+}

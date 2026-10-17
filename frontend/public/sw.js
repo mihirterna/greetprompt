@@ -1,4 +1,4 @@
-const CACHE_NAME = 'greetprompt-v2.1.0';
+const CACHE_NAME = 'greetprompt-v2.2.0';
 
 const PRECACHE_ASSETS = [
   '/',
@@ -24,7 +24,6 @@ const PRECACHE_ASSETS = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Pre-caching offline assets');
       return cache.addAll(PRECACHE_ASSETS).catch((err) => {
         console.warn('[Service Worker] Pre-cache partial error:', err);
       });
@@ -40,7 +39,6 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('[Service Worker] Removing old cache:', key);
             return caches.delete(key);
           }
         })

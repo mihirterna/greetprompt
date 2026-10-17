@@ -6,10 +6,23 @@ export interface OverlayOptions {
   bgDataUrl: string;
 }
 
+function isSafeBackgroundSource(src: string): boolean {
+  return (
+    /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/i.test(src) ||
+    /^\/scenes\/[A-Za-z0-9_-]+\.jpg$/.test(src)
+  );
+}
+
 export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string {
   const occasion = OCCASIONS[request.occasion] || OCCASIONS.good_morning;
   const scene = SCENES[request.sceneId] || occasion.scenes[0] || SCENES.gm_sunrise;
   const lang: Language = (request.language as Language) || 'en';
+
+  // The href is interpolated straight into the SVG, so only allow the two
+  // known-safe shapes (generated data URL or bundled scene asset).
+  const safeBgDataUrl = isSafeBackgroundSource(bgDataUrl)
+    ? bgDataUrl
+    : scene.previewImage || '/scenes/gm_krishna.jpg';
 
   const width = 1080;
   const height = 1350; // Standard 4:5 Mobile Portrait
@@ -211,7 +224,7 @@ export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string 
   </defs>
 
   <!-- Background Raster (Curated Preset or Neural SDXL Diffusion) -->
-  <image href="${bgDataUrl}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice" />
+  <image href="${safeBgDataUrl}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid slice" />
 
   <!-- Atmospheric Darkening Vignette Layer -->
   <rect width="${width}" height="${height}" fill="url(#vignetteGrad)" />

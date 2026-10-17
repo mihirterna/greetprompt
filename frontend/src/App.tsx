@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import confetti from 'canvas-confetti';
+import { SITE_URL, getSeoForPath } from './seo';
+import { NAVIGATE_EVENT } from './events';
 import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { AccordionStep } from './components/AccordionStep';
@@ -817,8 +819,8 @@ export const App: React.FC = () => {
           };
         });
       }
-    } catch (err) {
-      console.info('Using local preset cache:', err);
+    } catch {
+      console.warn('Preset API unavailable, using local cache.');
     }
   };
 
@@ -827,50 +829,29 @@ export const App: React.FC = () => {
     loadPresets();
   }, []);
 
-  // Sync document.title and canonical URL with current occasion
+  // Keep <title> and the canonical URL in sync with the URL path only.
+  // Never derive SEO metadata from transient form state: doing so made the
+  // homepage advertise a different landing page to crawlers (and flip by
+  // crawl timezone), which is why Google showed the raw URL instead of a title.
   useEffect(() => {
-    const OCCASION_SEO: Record<string, { title: string; path: string }> = {
-      ganesh_chaturthi: {
-        title: 'Ganesh Chaturthi AI Wishing Cards & Bappa Images — GreetPrompt',
-        path: '/ganesh-chaturthi',
-      },
-      diwali: {
-        title: 'Diwali AI Wishing Cards & Deepavali Greetings — GreetPrompt',
-        path: '/diwali',
-      },
-      good_morning: {
-        title: 'Good Morning AI Wishing Cards & Daily Blessings — GreetPrompt',
-        path: '/good-morning',
-      },
-      birthday: {
-        title: 'Birthday AI Wishing Cards & Luxury Celebration Greetings — GreetPrompt',
-        path: '/birthday',
-      },
-      navratri: {
-        title: 'Navratri & Garba AI Wishing Cards — GreetPrompt',
-        path: '/navratri',
-      },
-      new_year: {
-        title: 'New Year 2026 AI Wishing Cards & Fireworks — GreetPrompt',
-        path: '/new-year',
-      },
-    };
-
-    const seo = OCCASION_SEO[request.occasion];
-    if (seo) {
+    const syncMeta = () => {
+      const seo = getSeoForPath(window.location.pathname);
+      if (!seo) return;
       document.title = seo.title;
       const canonicalEl = document.querySelector('link[rel="canonical"]');
       if (canonicalEl) {
-        canonicalEl.setAttribute('href', `https://greetprompt.com${seo.path}`);
+        canonicalEl.setAttribute('href', `${SITE_URL}${seo.canonicalPath}`);
       }
-    } else {
-      document.title = 'GreetPrompt — Free AI Wishing Cards & Scene Prompt Studio';
-      const canonicalEl = document.querySelector('link[rel="canonical"]');
-      if (canonicalEl) {
-        canonicalEl.setAttribute('href', 'https://greetprompt.com/');
-      }
-    }
-  }, [request.occasion]);
+    };
+
+    syncMeta();
+    window.addEventListener('popstate', syncMeta);
+    window.addEventListener(NAVIGATE_EVENT, syncMeta);
+    return () => {
+      window.removeEventListener('popstate', syncMeta);
+      window.removeEventListener(NAVIGATE_EVENT, syncMeta);
+    };
+  }, []);
 
   const currentOccasion = occasions.find((o) => o.id === request.occasion) || occasions[0];
   const currentScene =
@@ -903,6 +884,27 @@ export const App: React.FC = () => {
     setCustomGeneratedBackground(null);
     setOpenStep(2);
   };
+
+  // Keep the Back/Forward handler fresh without re-registering the listener.
+  const popStateRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    popStateRef.current = () => {
+      const { occasion } = parseUrlState();
+      if (!occasion || occasion === request.occasion) return;
+      handleSelectOccasion(occasion);
+    };
+  });
+
+  // Restore occasion state when the user navigates Back/Forward between deep links.
+  useEffect(() => {
+    const handleUrlNavigation = () => popStateRef.current();
+    window.addEventListener('popstate', handleUrlNavigation);
+    window.addEventListener(NAVIGATE_EVENT, handleUrlNavigation);
+    return () => {
+      window.removeEventListener('popstate', handleUrlNavigation);
+      window.removeEventListener(NAVIGATE_EVENT, handleUrlNavigation);
+    };
+  }, []);
 
   const handleSelectScene = (sceneId: string) => {
     setRequest((prev) => ({ ...prev, sceneId, backgroundMode: 'preset' }));
