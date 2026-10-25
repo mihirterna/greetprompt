@@ -25,7 +25,8 @@ export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string 
     : scene.previewImage || '/scenes/gm_krishna.jpg';
 
   const width = 1080;
-  const height = 1350; // Standard 4:5 Mobile Portrait
+  const isStatus = request.aspectRatio === '9:16';
+  const height = isStatus ? 1920 : 1350; // 4:5 feed post & 9:16 WhatsApp Status / IG Story
 
   // Custom or Default Texts
   const title =
@@ -84,7 +85,12 @@ export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string 
   }
 
   // 1. Title Multi-line & Sizing Layout (Prevents horizontal title cropping)
-  const titleLayout = formatTitleLayout(title, lang, sizeMultiplier);
+  const titleLayout = formatTitleLayout(
+    title,
+    lang,
+    sizeMultiplier,
+    Math.round(height * 0.207)
+  );
 
   // 2. Multi-line quote wrapping & layout calculation for 4:5 Mobile Portrait
   const isIndic = ['hi', 'mr', 'gu', 'pa', 'te', 'ta', 'bn'].includes(lang);
@@ -111,32 +117,28 @@ export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string 
     lineSpacing = Math.round((isIndic ? 36 : 34) * sizeMultiplier);
   }
 
-  // quoteStartY adapts based on recipient presence and line count
-  let quoteStartY = recipient ? 540 : 500;
+  // Name-hero typography: the recipient's name is the card's featured line —
+  // large gold script under the title — and the quote block flows below it.
+  const titleBottomY =
+    titleLayout.startY + (titleLayout.lines.length - 1) * titleLayout.lineSpacing;
+  const nameFont = recipient
+    ? Math.round(
+        Math.max(44, Math.min(96, Math.floor(860 / Math.max(1, recipient.length * 0.5))))
+      )
+    : 0;
+  const nameBaselineY = recipient ? titleBottomY + 62 + nameFont : 0;
+
+  let quoteStartY = recipient
+    ? nameBaselineY + Math.round(nameFont * 0.62) + 96
+    : Math.round(height * 0.370);
   if (!recipient && quoteLines.length >= 5) {
-    quoteStartY = 460;
-  } else if (recipient && quoteLines.length >= 5) {
-    quoteStartY = 530;
+    quoteStartY = Math.round(height * 0.3407);
   }
 
   const dividerY = quoteStartY + (quoteLines.length - 1) * lineSpacing + 42;
   const senderY = dividerY + 44;
-  const trailerY = height - 90;
-
-  // 3. Dynamic Recipient Badge Dimensions
-  const recipientPillWidth = Math.max(260, Math.min(740, (recipient?.length || 0) * 16 + 64));
-  const recipientRectX =
-    alignment === 'left'
-      ? 110
-      : alignment === 'right'
-      ? 970 - recipientPillWidth
-      : 540 - recipientPillWidth / 2;
-  const recipientContentX =
-    alignment === 'left'
-      ? 110 + recipientPillWidth / 2
-      : alignment === 'right'
-      ? 970 - recipientPillWidth / 2
-      : 540;
+  const trailerY = height - Math.round(height * 0.0667);
+  const watermarkY = height - Math.round(height * 0.0385);
 
   // 4. Dynamic Sender Signature Line Width
   const senderLineWidth = Math.max(340, Math.min(760, ((sender?.length || 0) + 22) * 11));
@@ -172,6 +174,10 @@ export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string 
         font-family: 'Poppins', ${headerFont}, sans-serif;
         font-weight: 700;
         letter-spacing: 1px;
+      }
+      .font-name {
+        font-family: 'Great Vibes', ${headerFont}, cursive;
+        ${isRtl ? 'direction: rtl; unicode-bidi: embed;' : ''}
       }
       .font-quote {
         font-family: ${quoteFont};
@@ -261,19 +267,19 @@ export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string 
     <path d="M 12 0 L 15 9 L 24 12 L 15 15 L 12 24 L 9 15 L 0 12 L 9 9 Z" />
   </g>
 
-  <!-- 2. RECIPIENT DEDICATION (If Specified - Dynamic Pill Width) -->
+  <!-- 2. RECIPIENT NAME HERO (Large gold script — the card's featured line) -->
   ${
     recipient
       ? `
   <g filter="url(#softShadow)">
-    <rect x="${recipientRectX}" y="470" width="${recipientPillWidth}" height="42" rx="21" fill="#000000" fill-opacity="0.55" stroke="url(#goldFoil)" stroke-width="1.2" />
     <text
-      x="${recipientContentX}"
-      y="497"
-      text-anchor="middle"
-      font-size="20"
-      fill="#FFFFFF"
-      class="font-recipient"
+      x="${contentX}"
+      y="${nameBaselineY}"
+      text-anchor="${textAnchor}"
+      font-size="${nameFont}"
+      fill="url(#goldFoil)"
+      filter="url(#luxuryGlow)"
+      class="font-name"
     >${escapeXml(recipient)}</text>
   </g>`
       : ''
@@ -320,6 +326,17 @@ export function generateCardSvg({ request, bgDataUrl }: OverlayOptions): string 
     class="font-trailer"
     filter="url(#softShadow)"
   >${escapeXml(subtitle)}</text>
+
+  <!-- 6. SUBTLE SHARE BRAND MARK (watermark lightbox panel bottom-left) -->
+  <text
+    x="64"
+    y="${watermarkY}"
+    text-anchor="start"
+    font-size="15"
+    fill="url(#goldFoil)"
+    opacity="0.55"
+    class="font-trailer"
+  >✦ GreetPrompt.com</text>
 </svg>`.trim();
 }
 
@@ -357,7 +374,8 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
 function formatTitleLayout(
   title: string,
   lang: string,
-  sizeMultiplier: number
+  sizeMultiplier: number,
+  titleAnchorY: number
 ): TitleLayout {
   const isIndic = ['hi', 'mr', 'gu', 'pa', 'te', 'ta', 'bn'].includes(lang);
   const isCjk = ['ja', 'zh', 'ko'].includes(lang);
@@ -376,7 +394,7 @@ function formatTitleLayout(
       lines: [trimmed],
       fontSize: finalSize,
       lineSpacing: Math.round(finalSize * 1.25),
-      startY: 280,
+      startY: titleAnchorY,
     };
   }
 
@@ -404,7 +422,7 @@ function formatTitleLayout(
   const targetSize = Math.round(initialFontSize * 0.88);
   const finalSize = Math.min(targetSize, Math.max(32, maxSafeSize));
   const lineSpacing = Math.round(finalSize * (isIndic ? 1.28 : 1.22));
-  const startY = 280 - Math.round(lineSpacing * 0.45);
+  const startY = titleAnchorY - Math.round(lineSpacing * 0.45);
 
   return {
     lines,

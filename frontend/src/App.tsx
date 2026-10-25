@@ -19,7 +19,7 @@ import type {
   Language,
   LanguageInfo,
   StylePreset,
-  QualityMode,
+  AspectRatio,
   BackgroundMode,
   TextAlignment,
   TextSize,
@@ -639,10 +639,10 @@ export const App: React.FC = () => {
 
   // Read URL path and query parameters for deep-linking and festival landing pages
   const parseUrlState = () => {
-    if (typeof window === 'undefined') return { occasion: null, to: '', from: '', lang: '', scene: '' };
+    if (typeof window === 'undefined')
+      return { occasion: null, to: '', from: '', lang: '', scene: '', aspect: '' as AspectRatio | '' };
     const pathname = window.location.pathname.toLowerCase().replace(/^\/|\/$/g, '');
     const searchParams = new URLSearchParams(window.location.search);
-
     const pathOccasionMap: Record<string, OccasionId> = {
       'ganesh-chaturthi': 'ganesh_chaturthi',
       'ganeshchaturthi': 'ganesh_chaturthi',
@@ -662,8 +662,10 @@ export const App: React.FC = () => {
     const from = searchParams.get('from') || searchParams.get('sender') || '';
     const lang = searchParams.get('lang') || searchParams.get('language') || '';
     const scene = searchParams.get('scene') || searchParams.get('sceneId') || '';
+    const rawAspect = searchParams.get('aspect') || searchParams.get('format') || '';
+    const aspect: AspectRatio | '' = rawAspect === '9:16' || rawAspect === '4:5' ? (rawAspect as AspectRatio) : '';
 
-    return { occasion, to, from, lang, scene };
+    return { occasion, to, from, lang, scene, aspect };
   };
 
   const [incomingGiftBanner, setIncomingGiftBanner] = useState<{ recipient: string; sender: string } | null>(() => {
@@ -676,7 +678,7 @@ export const App: React.FC = () => {
 
   // Form State with Time-of-Day Adaptive Default & Deep-Link Recognition
   const [request, setRequest] = useState<CardRequest>(() => {
-    const { occasion: urlOccasion, to: urlTo, from: urlFrom, lang: urlLang, scene: urlScene } = parseUrlState();
+    const { occasion: urlOccasion, to: urlTo, from: urlFrom, lang: urlLang, scene: urlScene, aspect: urlAspect } = parseUrlState();
     const hour = new Date().getHours();
     const isMorning = hour >= 5 && hour < 12;
     const initialOccasion: OccasionId = urlOccasion || (isMorning ? 'good_morning' : 'ganesh_chaturthi');
@@ -701,8 +703,7 @@ export const App: React.FC = () => {
       textAlignment: 'center',
       textSize: 'standard',
       foilAccent: 'gold',
-      qualityMode: 'lightning',
-      aspectRatio: '4:5',
+      aspectRatio: urlAspect || '4:5',
     };
   });
 
@@ -864,6 +865,13 @@ export const App: React.FC = () => {
   const applyStylePreset = (preset: StylePreset) => {
     setStylePreset(preset);
     setRequest((prev) => ({ ...prev, ...STYLE_PRESETS[preset] }));
+    setGeneratedCard(null);
+  };
+
+  // Format switch is fully client-rendered (viewBox + crop) — the existing
+  // generated artwork is kept and just re-cropped for the new canvas.
+  const handleSelectAspect = (aspect: AspectRatio) => {
+    setRequest((prev) => ({ ...prev, aspectRatio: aspect }));
     setGeneratedCard(null);
   };
 
@@ -1116,9 +1124,7 @@ export const App: React.FC = () => {
                 customGeneratedBackground={customGeneratedBackground}
                 isLoading={isLoading}
                 onGenerate={handleGenerate}
-                onChangeQuality={(mode: QualityMode) =>
-                  setRequest((prev) => ({ ...prev, qualityMode: mode }))
-                }
+                onChangeAspect={handleSelectAspect}
                 occasionDef={currentOccasion}
                 sceneDef={currentScene}
               />

@@ -63,8 +63,9 @@ export async function generateBackgroundArt(
 
   const fullPrompt = buildDynamicPrompt(request);
   const numSteps = isUltraHd ? 20 : 4;
-  const width = 1024;
-  const height = 1280; // Standard 4:5 mobile portrait aspect ratio
+  // SDXL canvas follows the card format: 4:5 feed post & 9:16 Status/Story.
+  const width = request.aspectRatio === '9:16' ? 768 : 1024;
+  const height = request.aspectRatio === '9:16' ? 1344 : 1280;
 
   // Direct Cloudflare Workers AI Binding (env.AI)
   if (env.AI) {

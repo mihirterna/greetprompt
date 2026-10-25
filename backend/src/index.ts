@@ -14,7 +14,9 @@ import {
 import { OCCASIONS, SCENES, ALL_LANGUAGES, CULTURAL_SPHERES } from './templates/scenes';
 import { generateBackgroundArt, generateAiMessage, suggestImagePrompt } from './services/ai';
 import { generateCardSvg } from './services/textOverlay';
-import { saveCardImage, getCardImage } from './services/storage';
+import { saveCardImage, getCardImage, saveCardMeta, getCardMeta } from './services/storage';
+
+const SITE_URL = 'https://greetprompt.com';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -354,6 +356,8 @@ app.post('/api/generate', async (c) => {
       occasionDef.sampleQuotes.en?.[0] ||
       'Wishing you peace and joy.';
 
+    const createdAt = new Date().toISOString();
+
     const responseData: CardResponse = {
       id: cardId,
       imageUrl,
@@ -371,10 +375,30 @@ app.post('/api/generate', async (c) => {
       textAlignment: sanitized.textAlignment || 'center',
       textSize: sanitized.textSize || 'standard',
       foilAccent: sanitized.foilAccent || 'gold',
-      createdAt: new Date().toISOString(),
-      aspectRatio: '4:5',
+      createdAt,
+      aspectRatio: sanitized.aspectRatio || '4:5',
       fromCache: background.isMock,
     };
+
+    // Persist share metadata as a sibling JSON object so /card/:id can unfurl.
+    const sceneDef = occasionDef.scenes.find((s) => s.id === sanitized.sceneId);
+    await saveCardMeta(
+      cardId,
+      {
+        id: cardId,
+        occasionId: sanitized.occasion,
+        occasionLabel: occasionDef.label,
+        sceneId: sanitized.sceneId,
+        scenePreview: sceneDef?.previewImage,
+        title,
+        recipientName: sanitized.recipientName,
+        senderName: sanitized.senderName,
+        language: sanitized.language,
+        aspectRatio: responseData.aspectRatio,
+        createdAt,
+      },
+      c.env
+    );
 
     return c.json(responseData);
   } catch (error: any) {
@@ -416,6 +440,93 @@ app.get('/api/images/:key', async (c) => {
         "default-src 'none'; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; style-src 'unsafe-inline' https://fonts.googleapis.com",
     },
   });
+});
+
+// Minimal HTML escape for share-page attributes (text inside SVG is already escaped there).
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// The GreetPrompt app URL "deep links" a card section from the URL path
+// (e.g. /diwali/) and personalization through query params. /card/:id pages
+// route recipients there prefilled — this is the second-order viral loop.
+function appShareLink(meta: Record<string, any>): string {
+  const params = new URLSearchParams();
+  if (meta.occasionId) params.set('occasion', String(meta.occasionId));
+  if (meta.sceneId) params.set('scene', String(meta.sceneId));
+  if (meta.recipientName) params.set('to', String(meta.recipientName));
+  if (meta.senderName) params.set('from', String(meta.senderName));
+  if (meta.language) params.set('lang', String(meta.language));
+  return `${SITE_URL}/?${params.toString()}`;
+}
+
+// Shareable card landing page: inline SVG + unfurl tags + "Make your own" CTA.
+app.get('/card/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!/^wish_[0-9]+_[a-z0-9]+$/i.test(id)) {
+    return c.text('Card not found', 404);
+  }
+
+  const [meta, svg] = await Promise.all([
+    getCardMeta(id, c.env),
+    getCardImage(`${id}.svg`, c.env),
+  ]);
+
+  if (!svg) {
+    return c.redirect(`${SITE_URL}/`, 302);
+  }
+
+  const title = meta?.title || 'A Personalized Wish';
+  const recipient = meta?.recipientName ? `for ${meta.recipientName}` : '';
+  const sender = meta?.senderName ? `from ${meta.senderName}` : '';
+  const description =
+    [meta?.occasionLabel || 'Greeting', recipient, sender].filter(Boolean).join(' ').trim() ||
+    'A personalized gold-typography greeting card';
+  const ogImage = meta?.scenePreview ? `${SITE_URL}${meta.scenePreview}` : undefined;
+
+  const fontsHref =
+    "https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Anek+Bangla:wght@600;700&family=Anek+Gurmukhi:wght@600;700&family=Anek+Gujarati:wght@600;700&family=Anek+Tamil:wght@600;700&family=Anek+Telugu:wght@600;700&family=Cairo:wght@700;900&family=Cinzel:wght@700;900&family=Great+Vibes&family=Kalam:wght@400;700&family=Noto+Serif+JP:wght@600;800&family=Noto+Serif+KR:wght@600;800&family=Noto+Serif+SC:wght@600;800&family=Playfair+Display:ital,wght@0,600;0,800;1,500&family=Poppins:wght@400;600;700&family=Rasa:wght@600;700&family=Rozha+One&family=Yatra+One&display=swap";
+
+  const svgInline = svg.content.replace(/<svg /i, '<svg preserveAspectRatio="xMidYMid meet" ');
+
+  const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtml(title)} — GreetPrompt</title>
+<meta name="robots" content="noindex, follow" />
+<meta property="og:type" content="article" />
+<meta property="og:title" content="${escapeHtml(title)}" />
+<meta property="og:description" content="${escapeHtml(description)}" />
+${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}" />` : ''}
+<meta property="og:url" content="${escapeHtml(`${SITE_URL}/card/${id}`)}" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="${fontsHref}" />
+<style>
+  body { margin: 0; min-height: 100vh; background: radial-gradient(120% 90% at 50% 0%, #101625 0%, #070A10 60%); color: #E7DEF5; font-family: 'Poppins', system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 24px 16px 40px; }
+  .card { width: min(92vw, 560px); }
+  .card svg { width: 100%; height: auto; display: block; border-radius: 14px; box-shadow: 0 30px 70px rgba(0,0,0,.65), 0 0 0 1px rgba(255,215,130,.18); }
+  .cta { margin-top: 26px; display: inline-flex; align-items: center; gap: 8px; padding: 13px 26px; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 15px; color: #1A1002; background: linear-gradient(120deg, #FFE259, #FFA751 55%, #FFD54F); box-shadow: 0 10px 30px rgba(255, 190, 70, .35); }
+  .cta:active { transform: scale(.98); }
+  .brand { margin-top: 18px; font-size: 11px; letter-spacing: 2px; color: rgba(255,215,130,.6); text-transform: uppercase; }
+</style>
+</head>
+<body>
+<div class="card" id="card">${svgInline}</div>
+<a class="cta" href="${escapeHtml(appShareLink(meta || {}))}">✨ Make your own card — free</a>
+<div class="brand">greetprompt.com</div>
+</body>
+</html>`;
+
+  return c.html(html);
 });
 
 export default app;

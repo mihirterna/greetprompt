@@ -64,7 +64,7 @@ export interface CulturalSphereInfo {
 }
 
 export type QualityMode = 'lightning' | 'ultra_hd';
-export type AspectRatio = '4:5';
+export type AspectRatio = '4:5' | '9:16';
 export type BackgroundMode = 'preset' | 'custom_prompt';
 export type TextAlignment = 'center' | 'left' | 'right';
 export type TextSize = 'compact' | 'standard' | 'grand';

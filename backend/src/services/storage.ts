@@ -2,6 +2,7 @@ import { Env } from '../types';
 
 // In-memory LRU cache for local dev / non-R2 fallback
 const memoryCache = new Map<string, { content: string; contentType: string; createdAt: number }>();
+const memoryMeta = new Map<string, string>();
 
 export async function saveCardImage(
   id: string,
@@ -72,6 +73,63 @@ export async function getCardImage(
       content: cached.content,
       contentType: cached.contentType,
     };
+  }
+
+  return null;
+}
+
+/**
+ * Card share metadata for the /card/:id page. Stored as a sibling JSON
+ * object (`${id}.json`) next to the card SVG so the page can render
+ * WhatsApp/Twitter unfurl tags + the "Make your own" deep link without
+ * re-deriving them from the SVG.
+ */
+export async function saveCardMeta(id: string, meta: unknown, env: Env): Promise<void> {
+  const key = `${id}.json`;
+  const json = JSON.stringify(meta);
+
+  if (env.WISHES_BUCKET && typeof env.WISHES_BUCKET.put === 'function') {
+    try {
+      await env.WISHES_BUCKET.put(key, json, {
+        httpMetadata: {
+          contentType: 'application/json; charset=utf-8',
+          cacheControl: 'public, max-age=31536000, immutable',
+        },
+      });
+      return;
+    } catch (err) {
+      console.warn('R2 meta upload failed, falling back to memory cache:', err);
+    }
+  }
+
+  memoryMeta.set(key, json);
+  if (memoryMeta.size > 100) {
+    const firstKey = memoryMeta.keys().next().value;
+    if (firstKey) memoryMeta.delete(firstKey);
+  }
+}
+
+export async function getCardMeta(id: string, env: Env): Promise<Record<string, any> | null> {
+  const key = `${id}.json`;
+
+  if (env.WISHES_BUCKET && typeof env.WISHES_BUCKET.get === 'function') {
+    try {
+      const obj = await env.WISHES_BUCKET.get(key);
+      if (obj) {
+        return (await obj.json()) as Record<string, any>;
+      }
+    } catch (err) {
+      console.warn('R2 meta get error:', err);
+    }
+  }
+
+  const cached = memoryMeta.get(key);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as Record<string, any>;
+    } catch {
+      return null;
+    }
   }
 
   return null;

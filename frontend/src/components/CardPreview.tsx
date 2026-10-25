@@ -11,7 +11,7 @@ import {
 import {
   CardRequest,
   CardResponse,
-  QualityMode,
+  AspectRatio,
   OccasionDefinition,
   SceneDefinition,
 } from '../types';
@@ -23,7 +23,7 @@ interface CardPreviewProps {
   customGeneratedBackground?: string | null;
   isLoading: boolean;
   onGenerate: () => void;
-  onChangeQuality: (mode: QualityMode) => void;
+  onChangeAspect: (aspect: AspectRatio) => void;
   occasionDef?: OccasionDefinition;
   sceneDef?: SceneDefinition;
 }
@@ -60,7 +60,8 @@ function wrapText(text: string, maxCharsPerLine: number): string[] {
 function formatTitleLayout(
   title: string,
   lang: string,
-  sizeMultiplier: number
+  sizeMultiplier: number,
+  titleAnchorY: number
 ): TitleLayout {
   const isIndic = ['hi', 'mr', 'gu', 'pa', 'te', 'ta', 'bn'].includes(lang);
   const isCjk = ['ja', 'zh', 'ko'].includes(lang);
@@ -79,7 +80,7 @@ function formatTitleLayout(
       lines: [trimmed],
       fontSize: finalSize,
       lineSpacing: Math.round(finalSize * 1.25),
-      startY: 280,
+      startY: titleAnchorY,
     };
   }
 
@@ -107,7 +108,7 @@ function formatTitleLayout(
   const targetSize = Math.round(initialFontSize * 0.88);
   const finalSize = Math.min(targetSize, Math.max(32, maxSafeSize));
   const lineSpacing = Math.round(finalSize * (isIndic ? 1.28 : 1.22));
-  const startY = 280 - Math.round(lineSpacing * 0.45);
+  const startY = titleAnchorY - Math.round(lineSpacing * 0.45);
 
   return {
     lines,
@@ -123,7 +124,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   customGeneratedBackground,
   isLoading,
   onGenerate,
-  onChangeQuality,
+  onChangeAspect,
   occasionDef,
   sceneDef,
 }) => {
@@ -134,6 +135,10 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   const previewContainerRef = useRef<HTMLDivElement>(null);
   const lang = request.language || 'en';
   const isCustomPromptMode = request.backgroundMode === 'custom_prompt';
+
+  // Card format: 4:5 feed post (default) & 9:16 WhatsApp Status / IG Story.
+  const isStatus = request.aspectRatio === '9:16';
+  const cardHeight = isStatus ? 1920 : 1350;
 
   // Active Background Image (Preserves custom generated AI image even when text/alignment is edited)
   const activeBgUrl = customGeneratedBackground || sceneDef?.previewImage;
@@ -206,9 +211,14 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   }
 
   // 1. Title Multi-line & Sizing Layout (Prevents horizontal title cropping)
-  const titleLayout = formatTitleLayout(title, lang, sizeMultiplier);
+  const titleLayout = formatTitleLayout(
+    title,
+    lang,
+    sizeMultiplier,
+    Math.round(cardHeight * 0.207)
+  );
 
-  // 2. Multi-line quote wrapping & layout calculation for 4:5 Mobile Portrait
+  // 2. Multi-line quote wrapping & layout calculation
   const isIndic = ['hi', 'mr', 'gu', 'pa', 'te', 'ta', 'bn'].includes(lang);
   const isCjk = ['ja', 'zh', 'ko'].includes(lang);
   const isArabic = lang === 'ar';
@@ -233,35 +243,32 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
     lineSpacing = Math.round((isIndic ? 36 : 34) * sizeMultiplier);
   }
 
-  // quoteStartY adapts based on recipient presence and line count
-  let quoteStartY = request.recipientName ? 540 : 500;
-  if (!request.recipientName && quoteLines.length >= 5) {
-    quoteStartY = 460;
-  } else if (request.recipientName && quoteLines.length >= 5) {
-    quoteStartY = 530;
+  // Name-hero typography: the recipient's name is the card's featured line —
+  // large gold script under the title — and the quote block flows below it.
+  // (Mirrors backend/src/services/textOverlay.ts so preview === export.)
+  const recipientText = request.recipientName?.trim() || '';
+  const titleBottomY =
+    titleLayout.startY + (titleLayout.lines.length - 1) * titleLayout.lineSpacing;
+  const nameFont = recipientText
+    ? Math.round(
+        Math.max(44, Math.min(96, Math.floor(860 / Math.max(1, recipientText.length * 0.5))))
+      )
+    : 0;
+  const nameBaselineY = recipientText ? titleBottomY + 62 + nameFont : 0;
+
+  let quoteStartY = recipientText
+    ? nameBaselineY + Math.round(nameFont * 0.62) + 96
+    : Math.round(cardHeight * 0.370);
+  if (!recipientText && quoteLines.length >= 5) {
+    quoteStartY = Math.round(cardHeight * 0.3407);
   }
 
   const dividerY = quoteStartY + (quoteLines.length - 1) * lineSpacing + 42;
   const senderY = dividerY + 44;
-  const trailerY = 1350 - 90;
+  const trailerY = cardHeight - Math.round(cardHeight * 0.0667);
+  const watermarkY = cardHeight - Math.round(cardHeight * 0.0385);
 
-  // 3. Dynamic Recipient Badge Dimensions
-  const recipientText = request.recipientName?.trim() || '';
-  const recipientPillWidth = Math.max(260, Math.min(740, recipientText.length * 16 + 64));
-  const recipientRectX =
-    alignment === 'left'
-      ? 110
-      : alignment === 'right'
-      ? 970 - recipientPillWidth
-      : 540 - recipientPillWidth / 2;
-  const recipientContentX =
-    alignment === 'left'
-      ? 110 + recipientPillWidth / 2
-      : alignment === 'right'
-      ? 970 - recipientPillWidth / 2
-      : 540;
-
-  // 4. Dynamic Sender Signature Line Width
+  // Sender Signature Line Width
   const senderText = request.senderName?.trim() || '';
   const senderLineWidth = Math.max(340, Math.min(760, (senderText.length + 22) * 11));
   const senderLineX1 =
@@ -312,7 +319,9 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
       }
     }
 
-    let svgString = generatedCard?.svgContent;
+    const useServerSvg =
+      generatedCard && generatedCard.aspectRatio === request.aspectRatio;
+    let svgString = useServerSvg ? generatedCard!.svgContent : undefined;
 
     if (!svgString && previewContainerRef.current) {
       const svgEl = previewContainerRef.current.querySelector('svg');
@@ -331,7 +340,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
       canvas.width = 1080;
-      canvas.height = 1350;
+      canvas.height = cardHeight;
       const ctx = canvas.getContext('2d');
       if (!ctx) return resolve(null);
 
@@ -357,9 +366,9 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   // 1-Click WhatsApp Share (Image + Text Caption Combined)
   const handleWhatsAppShare = async () => {
     setSharing(true);
-    const recipientText = request.recipientName ? ` for ${request.recipientName}` : '';
-    const senderText = request.senderName ? `\n\n– With Warm Regards, ${request.senderName}` : '';
-    const shareText = `✨ *${title}*${recipientText} ✨\n\n"${quote}"${senderText}\n\n${subtitle}\n\n✨ *Create your personalized card free:* https://greetprompt.com`;
+    const forText = request.recipientName ? ` for ${request.recipientName}` : '';
+    const senderTail = request.senderName ? `\n\n– With Warm Regards, ${request.senderName}` : '';
+    const shareText = `✨ *${title}*${forText} ✨\n\n"${quote}"${senderTail}\n\n${subtitle}\n\n✨ *Create your personalized card free:* https://greetprompt.com`;
 
     try {
       const blob = await getCardBlob();
@@ -422,13 +431,21 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   };
 
   const handleCopy = () => {
-    const params = new URLSearchParams();
-    if (request.occasion) params.set('occasion', request.occasion);
-    if (request.sceneId) params.set('scene', request.sceneId);
-    if (request.recipientName) params.set('to', request.recipientName);
-    if (request.senderName) params.set('from', request.senderName);
-    if (request.language) params.set('lang', request.language);
-    const shareableUrl = `https://greetprompt.com/?${params.toString()}`;
+    // Prefer the /card/:id share page (rich WhatsApp unfurl + recipient CTA loop)
+    // once a card has actually been generated on the server.
+    let shareableUrl: string;
+    if (generatedCard) {
+      shareableUrl = `https://greetprompt.com/card/${generatedCard.id}`;
+    } else {
+      const params = new URLSearchParams();
+      if (request.occasion) params.set('occasion', request.occasion);
+      if (request.sceneId) params.set('scene', request.sceneId);
+      if (request.recipientName) params.set('to', request.recipientName);
+      if (request.senderName) params.set('from', request.senderName);
+      if (request.language) params.set('lang', request.language);
+      if (request.aspectRatio) params.set('aspect', request.aspectRatio);
+      shareableUrl = `https://greetprompt.com/?${params.toString()}`;
+    }
     navigator.clipboard.writeText(shareableUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
@@ -436,52 +453,53 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Top Mobile Format & Quality Controls Bar */}
+      {/* Top Mobile Format Controls Bar (Format replaced the old quality toggle) */}
       <div className="flex items-center justify-between gap-2 p-2 bg-slate-900/90 rounded-2xl border border-white/10 glass-card">
-        {/* Mobile Portrait Indicator */}
+        {/* Format Indicator */}
         <div className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-amber-300">
           <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-          <span>4:5 Mobile Portrait</span>
+          <span>{isStatus ? '1080×1920' : '1080×1350'}</span>
         </div>
 
-        {/* Quality Mode Toggle */}
+        {/* Format Toggle: Post vs Status */}
         <div className="flex items-center gap-1">
           <button
             type="button"
-            onClick={() => onChangeQuality('lightning')}
+            onClick={() => onChangeAspect('4:5')}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              request.qualityMode === 'lightning'
+              !isStatus
                 ? 'bg-amber-500 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
-            title="Fast Generation"
+            title="Feed post / portrait (4:5)"
           >
-            <Zap className="w-3 h-3 text-slate-950 fill-slate-950" />
-            <span>Fast</span>
+            <span>Post 4:5</span>
           </button>
           <button
             type="button"
-            onClick={() => onChangeQuality('ultra_hd')}
+            onClick={() => onChangeAspect('9:16')}
             className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-              request.qualityMode === 'ultra_hd'
+              isStatus
                 ? 'bg-amber-500 text-slate-950 shadow-sm'
                 : 'text-slate-400 hover:text-white'
             }`}
-            title="Ultra High Definition"
+            title="WhatsApp Status / Instagram Story (9:16)"
           >
-            <Sparkles className="w-3 h-3" />
-            <span>Ultra HD</span>
+            <Zap className="w-3 h-3 fill-current" />
+            <span>Status 9:16</span>
           </button>
         </div>
       </div>
 
-      {/* Primary Card Preview Container (100% Scalable 4:5 Aspect Ratio) */}
+      {/* Primary Card Preview Container (100% Scalable, format-aware aspect) */}
       <div
         ref={previewContainerRef}
-        className="relative w-full aspect-[4/5] rounded-3xl overflow-hidden shadow-2xl border border-amber-500/25 bg-slate-950 flex items-center justify-center [&_svg]:w-full [&_svg]:h-full [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:block"
+        className={`relative w-full ${
+          isStatus ? 'aspect-[9/16]' : 'aspect-[4/5]'
+        } rounded-3xl overflow-hidden shadow-2xl border border-amber-500/25 bg-slate-950 flex items-center justify-center [&_svg]:w-full [&_svg]:h-full [&_svg]:max-w-full [&_svg]:max-h-full [&_svg]:block`}
       >
         <svg
-          viewBox="0 0 1080 1350"
+          viewBox={`0 0 1080 ${cardHeight}`}
           className="w-full h-full block"
           xmlns="http://www.w3.org/2000/svg"
           xmlnsXlink="http://www.w3.org/1999/xlink"
@@ -519,22 +537,22 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
               href={activeBgUrl}
               xlinkHref={activeBgUrl}
               width="1080"
-              height="1350"
+              height={cardHeight}
               preserveAspectRatio="xMidYMid slice"
             />
           ) : (
-            <rect width="1080" height="1350" fill="url(#clientBackdropGlow)" />
+            <rect width="1080" height={cardHeight} fill="url(#clientBackdropGlow)" />
           )}
 
             {/* Layer 2: Vignette Scrim */}
-            <rect width="1080" height="1350" fill="url(#clientVignette)" />
+            <rect width="1080" height={cardHeight} fill="url(#clientVignette)" />
 
             {/* Layer 3: Border Frame */}
             <rect
               x="28"
               y="28"
               width="1024"
-              height="1294"
+              height={cardHeight - 56}
               rx="36"
               fill="none"
               stroke="url(#clientGold)"
@@ -545,7 +563,7 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
               x="42"
               y="42"
               width="996"
-              height="1266"
+              height={cardHeight - 84}
               rx="28"
               fill="none"
               stroke="url(#clientGold)"
@@ -583,27 +601,17 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
               ))}
             </g>
 
-            {/* 2. Recipient Badge (Dynamic width and centered pill) */}
-            {request.recipientName && (
+            {/* 2. Recipient Name Hero (Large gold script — mirrors the server renderer) */}
+            {recipientText && (
               <g filter="url(#clientShadow)">
-                <rect
-                  x={recipientRectX}
-                  y="470"
-                  width={recipientPillWidth}
-                  height="42"
-                  rx="21"
-                  fill="rgba(0, 0, 0, 0.55)"
-                  stroke="url(#clientGold)"
-                  strokeWidth="1.2"
-                />
                 <text
-                  x={recipientContentX}
-                  y="497"
-                  textAnchor="middle"
-                  fill="#FFFFFF"
-                  fontSize="20"
-                  fontFamily={`'Poppins', ${previewHeaderFont}, sans-serif`}
-                  fontWeight="700"
+                  x={contentX}
+                  y={nameBaselineY}
+                  textAnchor={textAnchor}
+                  fill="url(#clientGold)"
+                  fontSize={nameFont}
+                  fontFamily={`'Great Vibes', ${previewHeaderFont}, cursive`}
+                  fontWeight="400"
                 >
                   {recipientText}
                 </text>
@@ -673,6 +681,21 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
               filter="url(#clientShadow)"
             >
               {subtitle}
+            </text>
+
+            {/* 6. Subtle share brand mark (bottom-left, mirrors the server renderer) */}
+            <text
+              x="64"
+              y={watermarkY}
+              textAnchor="start"
+              fill="url(#clientGold)"
+              fontSize="15"
+              fontFamily="'Cinzel', 'Poppins', sans-serif"
+              fontWeight="700"
+              letterSpacing="2"
+              opacity="0.55"
+            >
+              ✦ GreetPrompt.com
             </text>
           </svg>
 
