@@ -64,7 +64,7 @@ export interface CulturalSphereInfo {
 }
 
 export type QualityMode = 'lightning' | 'ultra_hd';
-export type AspectRatio = '4:5';
+export type AspectRatio = '4:5' | '9:16';
 export type BackgroundMode = 'preset' | 'custom_prompt';
 export type TextAlignment = 'center' | 'left' | 'right';
 export type TextSize = 'compact' | 'standard' | 'grand';
@@ -99,6 +99,21 @@ export interface OccasionDefinition {
   scenes: SceneDefinition[];
   sampleQuotes: Record<string, string[]>;
   recipientSuggestions: Array<{ label: string; en: string; native?: string }>;
+}
+
+/** Shareable /card/:id page metadata persisted alongside the card SVG. */
+export interface CardShareMeta {
+  id: string;
+  occasionId: OccasionId;
+  occasionLabel: string;
+  sceneId: string;
+  scenePreview?: string;
+  title: string;
+  recipientName?: string;
+  senderName?: string;
+  language?: Language;
+  aspectRatio: AspectRatio;
+  createdAt: string;
 }
 
 export interface CardRequest {
