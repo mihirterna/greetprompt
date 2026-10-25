@@ -127,6 +127,7 @@ Pipelines live in [`.github/workflows/`](.github/workflows):
 | --- | --- | --- |
 | [`ci.yml`](.github/workflows/ci.yml) | PRs + pushes to `main` | **Frontend**: `tsc`, `vite build` + prerendered landing pages, then `scripts/verifyBuild.js` asserts every title/canonical/OG tag and the sitemap match `seo.config.json`. **Backend**: `tsc` + `wrangler deploy --dry-run`. |
 | [`deploy-backend.yml`](.github/workflows/deploy-backend.yml) | pushes to `main` touching `backend/**` | Deploys the Worker with `cloudflare/wrangler-action`. Skipped until enabled (below). |
+| [`deploy-frontend.yml`](.github/workflows/deploy-frontend.yml) | pushes to `main` touching `frontend/**` | Builds (vite + prerendered pages), runs `verifyBuild.js`, then deploys the output to the `cloudflare-wishes` Pages project (`greetprompt.com`). Skipped until the `CLOUDFLARE_PAGES_DEPLOY_ENABLED` variable is `true`. |
 | [`dependabot.yml`](.github/dependabot.yml) | weekly | Grouped npm (frontend + backend) and GitHub Actions update PRs. |
 
 Local equivalents:
