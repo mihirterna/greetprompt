@@ -16,72 +16,16 @@ import type {
   CardResponse,
   OccasionDefinition,
   OccasionId,
-  CulturalSphere,
-  CulturalSphereInfo,
   Language,
   LanguageInfo,
+  StylePreset,
   QualityMode,
   BackgroundMode,
+  TextAlignment,
+  TextSize,
+  FoilAccent,
 } from './types';
-
-const DEFAULT_SPHERES: CulturalSphereInfo[] = [
-  {
-    id: 'south_asia',
-    label: 'India & South Asia',
-    flag: '🇮🇳',
-    description: 'Festivals, Krishna, Chai, Diyas, Devanagari & Indic scripts',
-    defaultLanguage: 'hi',
-    languages: ['hi', 'mr', 'gu', 'pa', 'te', 'ta', 'bn', 'en', 'hinglish'],
-  },
-  {
-    id: 'global',
-    label: 'Global & Worldwide',
-    flag: '🌐',
-    description: 'Universal modern aesthetics, English & Spanish greetings',
-    defaultLanguage: 'en',
-    languages: ['en', 'es', 'fr', 'de', 'it'],
-  },
-  {
-    id: 'latin_america',
-    label: 'Latin America & Iberia',
-    flag: '💃',
-    description: 'Vibrant tropical scenes, fiesta, sunflowers, Español & Português',
-    defaultLanguage: 'es',
-    languages: ['es', 'pt', 'en'],
-  },
-  {
-    id: 'middle_east',
-    label: 'Middle East & Arab World',
-    flag: '🕌',
-    description: 'Arabian Dallah, Crescent Moon, Fanous, Arabic RTL calligraphy',
-    defaultLanguage: 'ar',
-    languages: ['ar', 'tr', 'en', 'fr'],
-  },
-  {
-    id: 'east_asia',
-    label: 'East & Southeast Asia',
-    flag: '🌸',
-    description: 'Mount Fuji, Cherry Blossoms, Zen gardens, Japanese, Korean & Chinese',
-    defaultLanguage: 'ja',
-    languages: ['ja', 'ko', 'zh', 'id', 'en'],
-  },
-  {
-    id: 'europe',
-    label: 'Europe & UK',
-    flag: '🏰',
-    description: 'Parisian cafés, Swiss Alps, Tuscan sunsets, French, German & Italian',
-    defaultLanguage: 'fr',
-    languages: ['fr', 'de', 'it', 'en', 'es'],
-  },
-  {
-    id: 'africa',
-    label: 'Africa & Safari',
-    flag: '🌍',
-    description: 'Serengeti sunrise, Kilimanjaro, African warmth, Swahili & English',
-    defaultLanguage: 'en',
-    languages: ['en', 'sw', 'fr'],
-  },
-];
+import { UI_SPHERE } from './types';
 
 const DEFAULT_LANGUAGES: LanguageInfo[] = [
   { id: 'mr', label: 'Marathi', nativeLabel: 'मराठी', fontFamily: "'Rozha One', 'Yatra One', sans-serif" },
@@ -685,14 +629,13 @@ const INITIAL_OCCASIONS: OccasionDefinition[] = [
 ];
 
 export const App: React.FC = () => {
-  const [currentSphere, setCurrentSphere] = useState<CulturalSphere>('south_asia');
-  const [spheres, setSpheres] = useState<CulturalSphereInfo[]>(DEFAULT_SPHERES);
   const [occasions, setOccasions] = useState<OccasionDefinition[]>(INITIAL_OCCASIONS);
   const [languages, setLanguages] = useState<LanguageInfo[]>(DEFAULT_LANGUAGES);
   const [locationName, setLocationName] = useState<string>('');
 
   // Accordion state
   const [openStep, setOpenStep] = useState<number>(1);
+  const [stylePreset, setStylePreset] = useState<StylePreset>('classic');
 
   // Read URL path and query parameters for deep-linking and festival landing pages
   const parseUrlState = () => {
@@ -746,7 +689,7 @@ export const App: React.FC = () => {
     return {
       occasion: initialOccasion,
       sceneId: initialScene,
-      sphere: 'south_asia',
+      sphere: UI_SPHERE,
       backgroundMode: 'preset',
       customImagePrompt: '',
       recipientName: urlTo,
@@ -769,15 +712,11 @@ export const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
 
-  const loadPresets = async (sphereOverride?: CulturalSphere) => {
+  const loadPresets = async () => {
     try {
-      const url = sphereOverride ? `/api/presets?sphere=${sphereOverride}` : '/api/presets';
-      const res = await fetch(url);
+      const res = await fetch('/api/presets');
       const data = await res.json();
 
-      if (data.culturalSpheres) {
-        setSpheres(data.culturalSpheres);
-      }
       if (data.occasions && data.occasions.length > 0) {
         setOccasions(data.occasions);
       }
@@ -787,10 +726,7 @@ export const App: React.FC = () => {
 
       if (data.detectedGeo) {
         const geo = data.detectedGeo;
-        const activeSphere = sphereOverride || data.detectedSphere || geo.sphere || 'south_asia';
-        setCurrentSphere(activeSphere);
-
-        const topLang = geo.prioritizedLanguages?.[0]?.id || data.suggestedLanguage || (activeSphere === 'south_asia' ? 'mr' : 'en');
+        const topLang = geo.prioritizedLanguages?.[0]?.id || data.suggestedLanguage || 'en';
 
         const cityCapitalized = geo.city ? geo.city.charAt(0).toUpperCase() + geo.city.slice(1) : '';
         const loc = [cityCapitalized, geo.stateCode, geo.countryCode].filter(Boolean).join(', ');
@@ -808,7 +744,6 @@ export const App: React.FC = () => {
 
           return {
             ...prev,
-            sphere: activeSphere,
             occasion: targetOccId,
             sceneId: defaultScene,
             language: targetLang,
@@ -859,7 +794,18 @@ export const App: React.FC = () => {
 
 
   const currentLangObj = languages.find((l) => l.id === request.language) || languages[0];
-  const activeSphereObj = spheres.find((s) => s.id === currentSphere) || spheres[0];
+
+  // One chip in Step 3 maps to the full typography triple — the old three
+  // micro-pickers (alignment / size / foil) collapsed into a Style row.
+  const STYLE_PRESETS: Record<
+    StylePreset,
+    { textAlignment: TextAlignment; textSize: TextSize; foilAccent: FoilAccent }
+  > = {
+    classic: { textAlignment: 'center', textSize: 'standard', foilAccent: 'gold' },
+    bold: { textAlignment: 'center', textSize: 'grand', foilAccent: 'gold' },
+    rose: { textAlignment: 'center', textSize: 'standard', foilAccent: 'rose_gold' },
+    silver: { textAlignment: 'center', textSize: 'standard', foilAccent: 'silver' },
+  };
 
   const handleSelectOccasion = (id: OccasionId) => {
     const nextOccasion = occasions.find((o) => o.id === id) || occasions[0];
@@ -882,7 +828,8 @@ export const App: React.FC = () => {
     }));
     setGeneratedCard(null);
     setCustomGeneratedBackground(null);
-    setOpenStep(2);
+    // Stay inside the merged "Occasion & Scene" step so the user picks a scene next.
+    setOpenStep(1);
   };
 
   // Keep the Back/Forward handler fresh without re-registering the listener.
@@ -907,16 +854,17 @@ export const App: React.FC = () => {
   }, []);
 
   const handleSelectScene = (sceneId: string) => {
-    setRequest((prev) => ({ ...prev, sceneId, backgroundMode: 'preset' }));
+    setRequest((prev) => ({ ...prev, sceneId, backgroundMode: 'preset' as BackgroundMode }));
     setGeneratedCard(null);
     setCustomGeneratedBackground(null);
-    setOpenStep(3);
+    // Scene chosen inside the merged Step 1 → advance to Personalize.
+    setOpenStep(2);
   };
 
-  const handleSelectSphere = (newSphere: CulturalSphere) => {
-    loadPresets(newSphere);
+  const applyStylePreset = (preset: StylePreset) => {
+    setStylePreset(preset);
+    setRequest((prev) => ({ ...prev, ...STYLE_PRESETS[preset] }));
     setGeneratedCard(null);
-    setCustomGeneratedBackground(null);
   };
 
   const toggleStep = (step: number) => {
@@ -963,11 +911,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#070A10] text-slate-100 flex flex-col font-sans">
-      <Navbar
-        currentSphere={currentSphere}
-        spheres={spheres}
-        onSelectSphere={handleSelectSphere}
-      />
+      <Navbar />
 
       {/* Main Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-7">
@@ -1015,8 +959,8 @@ export const App: React.FC = () => {
             <span className="text-gold-gradient block sm:inline">&amp; AI Prompts</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            {activeSphereObj?.description ||
-              'Create stunning greeting cards with luxury gold typography, AI scene prompts, and 1-tap WhatsApp sharing.'}
+            Create stunning greeting cards with luxury gold typography, AI scenes, and 1-tap
+            WhatsApp sharing.
           </p>
         </div>
 
@@ -1037,10 +981,10 @@ export const App: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column: Expandable/Collapsible Step Accordion (7 Cols) */}
           <div className="lg:col-span-7 space-y-3">
-            {/* Step 1: Choose Occasion */}
+            {/* Step 1: Occasion & Scene (merged) */}
             <AccordionStep
               stepNumber={1}
-              title="Choose Occasion"
+              title="Occasion &amp; Scene"
               isOpen={openStep === 1}
               onToggle={() => toggleStep(1)}
               summaryBadge={
@@ -1055,60 +999,38 @@ export const App: React.FC = () => {
                 selectedOccasion={request.occasion}
                 onSelectOccasion={handleSelectOccasion}
               />
+
+              <div className="pt-2 border-t border-white/5">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                  Pick a scene
+                </p>
+                <ScenePicker
+                  scenes={currentOccasion.scenes}
+                  selectedSceneId={request.sceneId}
+                  occasionId={request.occasion}
+                  customPrompt={request.customImagePrompt || ''}
+                  onSelectScene={handleSelectScene}
+                  onChangeCustomPrompt={(prompt: string) => {
+                    setRequest((prev) => ({
+                      ...prev,
+                      backgroundMode: prompt.trim() ? ('custom_prompt' as BackgroundMode) : ('preset' as BackgroundMode),
+                      customImagePrompt: prompt,
+                    }));
+                    setGeneratedCard(null);
+                  }}
+                />
+              </div>
             </AccordionStep>
 
-            {/* Step 2: Background Scene & Visual Subject (Hybrid Dual-Engine) */}
+            {/* Step 2: Personalize (recipient primary, sender optional) */}
             <AccordionStep
               stepNumber={2}
-              title="Background Scene &amp; Visuals"
+              title="Personalize Names"
               isOpen={openStep === 2}
               onToggle={() => toggleStep(2)}
               summaryBadge={
-                request.backgroundMode === 'custom_prompt' ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold">
-                    <span>✨</span>
-                    <span className="truncate max-w-[140px]">Custom AI Prompt</span>
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold">
-                    <span>{currentScene?.icon}</span>
-                    <span className="truncate max-w-[140px]">{currentScene?.label}</span>
-                  </span>
-                )
-              }
-            >
-              <ScenePicker
-                scenes={currentOccasion.scenes}
-                selectedSceneId={request.sceneId}
-                sphere={currentSphere}
-                occasionId={request.occasion}
-                backgroundMode={request.backgroundMode || 'preset'}
-                customPrompt={request.customImagePrompt || ''}
-                onSelectScene={handleSelectScene}
-                onChangeBackgroundMode={(mode: BackgroundMode) => {
-                  setRequest((prev) => ({ ...prev, backgroundMode: mode }));
-                  setGeneratedCard(null);
-                }}
-                onChangeCustomPrompt={(prompt: string) => {
-                  setRequest((prev) => ({
-                    ...prev,
-                    backgroundMode: 'custom_prompt',
-                    customImagePrompt: prompt,
-                  }));
-                  setGeneratedCard(null);
-                }}
-              />
-            </AccordionStep>
-
-            {/* Step 3: Personalize Names */}
-            <AccordionStep
-              stepNumber={3}
-              title="Personalize Names"
-              isOpen={openStep === 3}
-              onToggle={() => toggleStep(3)}
-              summaryBadge={
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/10 border border-white/10 text-slate-300 text-xs font-medium truncate max-w-[160px]">
-                  {request.recipientName ? `To: ${request.recipientName}` : 'Custom Recipient'}
+                  {request.recipientName ? `To: ${request.recipientName}` : 'Add recipient'}
                 </span>
               }
             >
@@ -1128,15 +1050,15 @@ export const App: React.FC = () => {
               />
             </AccordionStep>
 
-            {/* Step 4: Greeting Message & Language */}
+            {/* Step 3: Message & Style */}
             <AccordionStep
-              stepNumber={4}
-              title="Greeting Message &amp; Language"
-              isOpen={openStep === 4}
-              onToggle={() => toggleStep(4)}
+              stepNumber={3}
+              title="Message &amp; Style"
+              isOpen={openStep === 3}
+              onToggle={() => toggleStep(3)}
               summaryBadge={
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-bold">
-                  {currentLangObj?.nativeLabel || 'मराठी'}
+                  {currentLangObj?.nativeLabel || 'English'}
                 </span>
               }
             >
@@ -1146,12 +1068,9 @@ export const App: React.FC = () => {
                 supportedLanguages={languages}
                 customTitle={request.customTitle || ''}
                 customQuote={request.customQuote || ''}
-                customSubtitle={request.customSubtitle || ''}
-                textAlignment={request.textAlignment || 'center'}
-                textSize={request.textSize || 'standard'}
-                foilAccent={request.foilAccent || 'gold'}
                 recipientName={request.recipientName}
                 senderName={request.senderName}
+                stylePreset={stylePreset}
                 onChangeLanguage={(lang: Language) => {
                   const newTitle =
                     currentOccasion?.defaultTitle[lang] ||
@@ -1180,21 +1099,10 @@ export const App: React.FC = () => {
                   setGeneratedCard(null);
                 }}
                 onChangeSubtitle={(subtitle: string) => {
+                  // AI-written trailer/sign-off — kept in state, not user-editable UI.
                   setRequest((prev) => ({ ...prev, customSubtitle: subtitle }));
-                  setGeneratedCard(null);
                 }}
-                onChangeAlignment={(align) => {
-                  setRequest((prev) => ({ ...prev, textAlignment: align }));
-                  setGeneratedCard(null);
-                }}
-                onChangeTextSize={(size) => {
-                  setRequest((prev) => ({ ...prev, textSize: size }));
-                  setGeneratedCard(null);
-                }}
-                onChangeFoilAccent={(foil) => {
-                  setRequest((prev) => ({ ...prev, foilAccent: foil }));
-                  setGeneratedCard(null);
-                }}
+                onChangeStyle={applyStylePreset}
               />
             </AccordionStep>
           </div>
