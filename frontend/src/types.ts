@@ -70,6 +70,15 @@ export type TextAlignment = 'center' | 'left' | 'right';
 export type TextSize = 'compact' | 'standard' | 'grand';
 export type FoilAccent = 'gold' | 'rose_gold' | 'silver';
 export type MessageTone = 'devotional' | 'poetic' | 'cheerful' | 'formal';
+/** Frontend-only preset that maps a single chip to alignment+size+foil. */
+export type StylePreset = 'classic' | 'bold' | 'rose' | 'silver';
+
+/**
+ * The renderer's cultural engine is currently curated for South Asia
+ * (festivals, Indic scripts, devotional scenes). The sphere is no longer a
+ * UI choice — it is a fixed engine parameter, so requests always send this.
+ */
+export const UI_SPHERE = 'south_asia' as const;
 export type TimeOfDay = 'sunrise' | 'morning' | 'sunset' | 'night';
 
 export interface SceneDefinition {

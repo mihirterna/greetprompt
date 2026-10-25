@@ -1,21 +1,10 @@
 import React, { useState } from 'react';
-import {
-  Sparkles,
-  AlignLeft,
-  AlignCenter,
-  AlignRight,
-  Type,
-  Palette,
-  Wand2,
-  RefreshCw,
-} from 'lucide-react';
+import { Sparkles, Wand2, RefreshCw } from 'lucide-react';
 import {
   OccasionDefinition,
   Language,
   LanguageInfo,
-  TextAlignment,
-  TextSize,
-  FoilAccent,
+  StylePreset,
   MessageTone,
 } from '../types';
 
@@ -25,20 +14,29 @@ interface QuotePickerProps {
   supportedLanguages: LanguageInfo[];
   customTitle: string;
   customQuote: string;
-  customSubtitle: string;
-  textAlignment: TextAlignment;
-  textSize: TextSize;
-  foilAccent: FoilAccent;
   recipientName?: string;
   senderName?: string;
+  stylePreset: StylePreset;
   onChangeLanguage: (lang: Language) => void;
   onChangeTitle: (title: string) => void;
   onChangeQuote: (quote: string) => void;
+  /** Set automatically by the AI writer (trailer line) — no input shown. */
   onChangeSubtitle: (subtitle: string) => void;
-  onChangeAlignment: (align: TextAlignment) => void;
-  onChangeTextSize: (size: TextSize) => void;
-  onChangeFoilAccent: (foil: FoilAccent) => void;
+  onChangeStyle: (preset: StylePreset) => void;
 }
+
+/**
+ * The rest of supportedLanguages stays available through the overflow select —
+ * hiding it from the chip row keeps the default flow to a glance.
+ */
+const QUICK_LANGUAGES: Language[] = ['hi', 'en', 'mr', 'hinglish'];
+
+const STYLES: { id: StylePreset; label: string; hint: string; className: string }[] = [
+  { id: 'classic', label: 'Classic', hint: 'Elegant gold', className: 'from-amber-400 to-yellow-500' },
+  { id: 'bold', label: 'Bold', hint: 'Large gold', className: 'from-amber-300 to-amber-500' },
+  { id: 'rose', label: 'Rose', hint: 'Rose gold', className: 'from-rose-300 to-pink-500' },
+  { id: 'silver', label: 'Silver', hint: 'Silver pearl', className: 'from-slate-200 to-slate-400' },
+];
 
 export const QuotePicker: React.FC<QuotePickerProps> = ({
   occasionDef,
@@ -46,25 +44,23 @@ export const QuotePicker: React.FC<QuotePickerProps> = ({
   supportedLanguages,
   customTitle,
   customQuote,
-  customSubtitle,
-  textAlignment,
-  textSize,
-  foilAccent,
   recipientName,
   senderName,
+  stylePreset,
   onChangeLanguage,
   onChangeTitle,
   onChangeQuote,
   onChangeSubtitle,
-  onChangeAlignment,
-  onChangeTextSize,
-  onChangeFoilAccent,
+  onChangeStyle,
 }) => {
   const [selectedTone, setSelectedTone] = useState<MessageTone>('devotional');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
   const currentLangObj = supportedLanguages.find((l) => l.id === language) || supportedLanguages[0];
   const isRtl = !!currentLangObj?.isRtl;
+
+  const quickLanguages = supportedLanguages.filter((l) => QUICK_LANGUAGES.includes(l.id));
+  const moreLanguages = supportedLanguages.filter((l) => !QUICK_LANGUAGES.includes(l.id));
 
   const tones: Array<{ id: MessageTone; label: string; icon: string }> = [
     { id: 'devotional', label: 'Devotional', icon: '🙏' },
@@ -107,36 +103,39 @@ export const QuotePicker: React.FC<QuotePickerProps> = ({
 
   return (
     <div className="space-y-4 pt-1">
-      {/* 1. Language Quick Chips */}
+      {/* 1. Language: quick chips + overflow */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs text-slate-400 font-medium">Select Language:</span>
-          <span className="text-[10px] text-amber-400 font-semibold">
-            {supportedLanguages.length} Languages Available
-          </span>
+          <span className="text-xs text-slate-400 font-medium">Language:</span>
+          {moreLanguages.length > 0 && (
+            <select
+              value={quickLanguages.some((l) => l.id === language) ? '' : language}
+              onChange={(e) => {
+                if (e.target.value) onChangeLanguage(e.target.value as Language);
+              }}
+              className="px-2 py-1 rounded-lg bg-slate-950/70 border border-white/10 text-[11px] text-slate-300 focus:outline-none focus:border-amber-400 cursor-pointer max-w-[140px] truncate"
+              aria-label="More languages"
+            >
+              <option value="" disabled hidden>
+                More languages…
+              </option>
+              {moreLanguages.map((langObj) => (
+                <option key={langObj.id} value={langObj.id}>
+                  {langObj.nativeLabel}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-          {supportedLanguages.map((langObj) => {
+          {quickLanguages.map((langObj) => {
             const isSelected = language === langObj.id;
             return (
               <button
                 key={langObj.id}
                 type="button"
-                onClick={() => {
-                  onChangeLanguage(langObj.id);
-                  const defaultH =
-                    occasionDef?.defaultTitle[langObj.id] ||
-                    occasionDef?.defaultTitle.en ||
-                    occasionDef?.label ||
-                    '';
-                  const defaultQ =
-                    occasionDef?.sampleQuotes[langObj.id]?.[0] ||
-                    occasionDef?.sampleQuotes.en?.[0] ||
-                    '';
-                  if (defaultH) onChangeTitle(defaultH);
-                  if (defaultQ) onChangeQuote(defaultQ);
-                }}
+                onClick={() => onChangeLanguage(langObj.id)}
                 className={`px-3 py-1 rounded-xl text-xs font-bold whitespace-nowrap transition-all border ${
                   isSelected
                     ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20 ring-1 ring-amber-400/40'
@@ -150,7 +149,7 @@ export const QuotePicker: React.FC<QuotePickerProps> = ({
         </div>
       </div>
 
-      {/* 2. AI Message Generator Action Bar */}
+      {/* 2. AI Message Writer */}
       <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900/80 to-slate-900/80 border border-amber-500/30 space-y-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-xs font-bold text-amber-300">
@@ -178,7 +177,7 @@ export const QuotePicker: React.FC<QuotePickerProps> = ({
           </button>
         </div>
 
-        {/* Tone Selector Chips */}
+        {/* Tone Chips */}
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
           {tones.map((t) => (
             <button
@@ -198,7 +197,7 @@ export const QuotePicker: React.FC<QuotePickerProps> = ({
         </div>
       </div>
 
-      {/* 3. Editable Header / Greeting Title */}
+      {/* 3. Greeting Title */}
       <div className="space-y-1">
         <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
           <span>Greeting Title:</span>
@@ -214,7 +213,7 @@ export const QuotePicker: React.FC<QuotePickerProps> = ({
         />
       </div>
 
-      {/* 4. Editable Main Body Quote */}
+      {/* 4. Main Blessing / Quote */}
       <div className="space-y-1">
         <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
           <span>Main Blessing / Quote:</span>
@@ -230,138 +229,32 @@ export const QuotePicker: React.FC<QuotePickerProps> = ({
         />
       </div>
 
-      {/* 5. Editable Trailer / Subtitle Sign-Off */}
-      <div className="space-y-1">
-        <label className="text-xs font-bold text-slate-300 flex items-center justify-between">
-          <span>Footer Blessing:</span>
-          <span className="text-[10px] text-slate-500 font-normal">Bottom Sign-off</span>
-        </label>
-        <input
-          type="text"
-          value={customSubtitle}
-          onChange={(e) => onChangeSubtitle(e.target.value)}
-          placeholder="✨ WISHING YOU JOY, PEACE & BLESSINGS ✨"
-          className="w-full px-3.5 py-2 rounded-xl bg-slate-950/70 border border-white/10 text-slate-300 text-xs focus:outline-none focus:border-amber-400 focus:ring-1 focus:ring-amber-400 transition-all placeholder:text-slate-600"
-          dir={isRtl ? 'rtl' : 'ltr'}
-        />
-      </div>
-
-      {/* 6. Typography Formatting Controls (Alignment, Size, Metallic Shimmer) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-        {/* Alignment */}
-        <div className="space-y-1 p-2 rounded-xl bg-slate-950/50 border border-white/5">
-          <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-            <AlignLeft className="w-3 h-3 text-amber-400" />
-            <span>Alignment</span>
-          </div>
-          <div className="grid grid-cols-3 gap-1">
-            <button
-              type="button"
-              onClick={() => onChangeAlignment('left')}
-              className={`p-1.5 rounded-lg text-xs flex items-center justify-center transition-all ${
-                textAlignment === 'left'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'bg-white/5 text-slate-400 hover:text-white'
-              }`}
-              title="Left Align"
-            >
-              <AlignLeft className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeAlignment('center')}
-              className={`p-1.5 rounded-lg text-xs flex items-center justify-center transition-all ${
-                textAlignment === 'center'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'bg-white/5 text-slate-400 hover:text-white'
-              }`}
-              title="Center Align"
-            >
-              <AlignCenter className="w-3.5 h-3.5" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeAlignment('right')}
-              className={`p-1.5 rounded-lg text-xs flex items-center justify-center transition-all ${
-                textAlignment === 'right'
-                  ? 'bg-amber-500 text-slate-950 shadow-sm'
-                  : 'bg-white/5 text-slate-400 hover:text-white'
-              }`}
-              title="Right Align"
-            >
-              <AlignRight className="w-3.5 h-3.5" />
-            </button>
-          </div>
+      {/* 5. Style — one row replaces alignment + size + foil pickers */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-bold text-slate-300">Style:</label>
+          <span className="text-[10px] text-slate-500 font-normal">
+            {STYLES.find((s) => s.id === stylePreset)?.hint || ''}
+          </span>
         </div>
-
-        {/* Text Sizing */}
-        <div className="space-y-1 p-2 rounded-xl bg-slate-950/50 border border-white/5">
-          <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-            <Type className="w-3 h-3 text-amber-400" />
-            <span>Text Size</span>
-          </div>
-          <div className="grid grid-cols-3 gap-1">
-            {(['compact', 'standard', 'grand'] as TextSize[]).map((s) => (
+        <div className="grid grid-cols-4 gap-1.5">
+          {STYLES.map((s) => {
+            const isSelected = stylePreset === s.id;
+            return (
               <button
-                key={s}
+                key={s.id}
                 type="button"
-                onClick={() => onChangeTextSize(s)}
-                className={`py-1.5 rounded-lg text-[10px] font-bold capitalize transition-all ${
-                  textSize === s
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
+                onClick={() => onChangeStyle(s.id)}
+                className={`py-1.5 rounded-lg text-[11px] font-bold transition-all ${
+                  isSelected
+                    ? `bg-gradient-to-r ${s.className} text-slate-950 shadow-sm`
                     : 'bg-white/5 text-slate-400 hover:text-white'
                 }`}
               >
-                {s === 'compact' ? 'S' : s === 'standard' ? 'M' : 'L'}
+                {s.label}
               </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Metallic Foil Palette */}
-        <div className="space-y-1 p-2 rounded-xl bg-slate-950/50 border border-white/5">
-          <div className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
-            <Palette className="w-3 h-3 text-amber-400" />
-            <span>Foil Accent</span>
-          </div>
-          <div className="grid grid-cols-3 gap-1">
-            <button
-              type="button"
-              onClick={() => onChangeFoilAccent('gold')}
-              className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                foilAccent === 'gold'
-                  ? 'bg-gradient-to-r from-amber-400 to-yellow-500 text-slate-950 shadow-sm'
-                  : 'bg-white/5 text-amber-300 hover:bg-white/10'
-              }`}
-              title="24K Yellow Gold"
-            >
-              Gold
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeFoilAccent('rose_gold')}
-              className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                foilAccent === 'rose_gold'
-                  ? 'bg-gradient-to-r from-rose-300 to-pink-500 text-slate-950 shadow-sm'
-                  : 'bg-white/5 text-rose-300 hover:bg-white/10'
-              }`}
-              title="Rose Gold"
-            >
-              Rose
-            </button>
-            <button
-              type="button"
-              onClick={() => onChangeFoilAccent('silver')}
-              className={`py-1.5 rounded-lg text-[10px] font-bold transition-all ${
-                foilAccent === 'silver'
-                  ? 'bg-gradient-to-r from-slate-200 to-slate-400 text-slate-950 shadow-sm'
-                  : 'bg-white/5 text-slate-300 hover:bg-white/10'
-              }`}
-              title="Silver & Pearl"
-            >
-              Silver
-            </button>
-          </div>
+            );
+          })}
         </div>
       </div>
     </div>
