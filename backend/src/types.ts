@@ -138,6 +138,8 @@ export interface CardRequest {
 export interface CardResponse {
   id: string;
   imageUrl?: string;
+  /** Stateless, forever-alive share link (/card/s/&lt;state&gt;). */
+  shareStateUrl?: string;
   svgContent: string;
   promptUsed: string;
   occasion: OccasionId;
