@@ -7,6 +7,8 @@ import {
   CulturalSphere,
   Language,
   LanguageInfo,
+  OccasionId,
+  AspectRatio,
   AiMessageRequest,
   AiPromptSuggestRequest,
   MessageTone,
@@ -358,9 +360,26 @@ app.post('/api/generate', async (c) => {
 
     const createdAt = new Date().toISOString();
 
+    // Persist share metadata as a sibling JSON object so /card/:id can unfurl.
+    const sceneDef = occasionDef.scenes.find((s) => s.id === sanitized.sceneId);
+
+    // Stateless, forever-alive share link: the complete render state travels
+    // in the URL itself, so recipients never depend on server-side card
+    // storage (R2 is not bound yet — cards live in a per-isolate cache).
+    const shareState = buildShareState({
+      occasionId: sanitized.occasion,
+      sceneId: sanitized.sceneId,
+      recipientName: sanitized.recipientName,
+      senderName: sanitized.senderName,
+      language: sanitized.language,
+      aspectRatio: sanitized.aspectRatio || '4:5',
+      customTitle: sanitized.customTitle,
+    });
+
     const responseData: CardResponse = {
       id: cardId,
       imageUrl,
+      shareStateUrl: `${SITE_URL}/card/s/${shareState}`,
       svgContent,
       promptUsed: background.promptUsed,
       occasion: sanitized.occasion,
@@ -381,7 +400,6 @@ app.post('/api/generate', async (c) => {
     };
 
     // Persist share metadata as a sibling JSON object so /card/:id can unfurl.
-    const sceneDef = occasionDef.scenes.find((s) => s.id === sanitized.sceneId);
     await saveCardMeta(
       cardId,
       {
@@ -462,54 +480,164 @@ function appShareLink(meta: Record<string, any>): string {
   if (meta.recipientName) params.set('to', String(meta.recipientName));
   if (meta.senderName) params.set('from', String(meta.senderName));
   if (meta.language) params.set('lang', String(meta.language));
-  return `${SITE_URL}/?${params.toString()}`;
+  const query = params.toString();
+  return query ? `${SITE_URL}/?${query}` : `${SITE_URL}/`;
 }
 
-// Shareable card landing page: inline SVG + unfurl tags + "Make your own" CTA.
-app.get('/card/:id', async (c) => {
-  const id = c.req.param('id');
-  if (!/^wish_[0-9]+_[a-z0-9]+$/i.test(id)) {
-    return c.text('Card not found', 404);
+// ---------------------------------------------------------------------------
+// Shareable card pages
+// ---------------------------------------------------------------------------
+// Two shapes serve the same second-order viral loop ("recipient becomes a
+// creator"):
+//   /card/:id      — lookup persisted card (R2 when bound; per-isolate memory
+//                    cache otherwise) and re-render from metadata on storage
+//                    misses, so pages survive cold isolates.
+//   /card/s/:state — fully stateless: the render state travels IN the URL,
+//                    so the link works forever without any storage. This is
+//                    what the frontend "Copy Link" shares by default.
+// ---------------------------------------------------------------------------
+
+const SHARE_FONTS_HREF =
+  'https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Anek+Bangla:wght@600;700&family=Anek+Gurmukhi:wght@600;700&family=Anek+Gujarati:wght@600;700&family=Anek+Tamil:wght@600;700&family=Anek+Telugu:wght@600;700&family=Cairo:wght@700;900&family=Cinzel:wght@700;900&family=Great+Vibes&family=Kalam:wght@400;700&family=Noto+Serif+JP:wght@600;800&family=Noto+Serif+KR:wght@600;800&family=Noto+Serif+SC:wght@600;800&family=Playfair+Display:ital,wght@0,600;0,800;1,500&family=Poppins:wght@400;600;700&family=Rasa:wght@600;700&family=Rozha+One&family=Yatra+One&display=swap';
+
+// UTF-8-safe base64url (URL-shareable, no `+/=`).
+const textEncoder = new TextEncoder();
+const textDecoder = new TextDecoder();
+
+function b64uEncode(text: string): string {
+  let binary = '';
+  for (const byte of textEncoder.encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function b64uDecode(token: string): string {
+  const base64 = token.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (ch) => ch.charCodeAt(0));
+  return textDecoder.decode(bytes);
+}
+
+interface ShareStateFields {
+  occasionId: OccasionId;
+  sceneId: string;
+  recipientName?: string;
+  senderName?: string;
+  language?: Language;
+  aspectRatio?: AspectRatio;
+  customTitle?: string;
+}
+
+// Encodes the minimal renderable state. Default texts are NOT encoded — the
+// renderer reproduces them deterministically per occasion+language.
+function buildShareState(fields: ShareStateFields): string {
+  const params = new URLSearchParams();
+  params.set('o', fields.occasionId);
+  params.set('sc', fields.sceneId);
+  if (fields.recipientName) params.set('r', fields.recipientName);
+  if (fields.senderName) params.set('s', fields.senderName);
+  if (fields.language) params.set('l', fields.language);
+  params.set('a', fields.aspectRatio === '9:16' ? '9:16' : '4:5');
+  if (fields.customTitle) params.set('t', fields.customTitle);
+  return b64uEncode(params.toString());
+}
+
+interface ParsedShareState {
+  request: CardRequest;
+  scene: { id: string; previewImage?: string; label: string };
+  title: string;
+}
+
+function clampShareQuery(value: string | null, maxLength: number): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : undefined;
+}
+
+function parseShareState(token: string): ParsedShareState | null {
+  let text: string;
+  try {
+    text = b64uDecode(token);
+  } catch {
+    return null;
   }
+  if (text.length > 600) return null;
 
-  const [meta, svg] = await Promise.all([
-    getCardMeta(id, c.env),
-    getCardImage(`${id}.svg`, c.env),
-  ]);
+  const params = new URLSearchParams(text);
+  const occasionId = (params.get('o') || '') as OccasionId;
+  const occasionDef = OCCASIONS[occasionId];
+  if (!occasionDef) return null;
 
-  if (!svg) {
-    return c.redirect(`${SITE_URL}/`, 302);
-  }
+  const requestedScene = params.get('sc') || '';
+  const scene = occasionDef.scenes.find((s) => s.id === requestedScene) || occasionDef.scenes[0];
+  if (!scene) return null;
 
-  const title = meta?.title || 'A Personalized Wish';
-  const recipient = meta?.recipientName ? `for ${meta.recipientName}` : '';
-  const sender = meta?.senderName ? `from ${meta.senderName}` : '';
+  const languageId = (params.get('l') || '') as Language;
+  const language = ALL_LANGUAGES[languageId] ? languageId : ('en' as Language);
+
+  const request: CardRequest = {
+    occasion: occasionId,
+    sceneId: scene.id,
+    backgroundMode: 'preset' as const,
+    recipientName: clampShareQuery(params.get('r'), 80),
+    senderName: clampShareQuery(params.get('s'), 80),
+    language,
+    customTitle: clampShareQuery(params.get('t'), TEXT_LIMITS.customTitle),
+    aspectRatio: params.get('a') === '9:16' ? ('9:16' as const) : ('4:5' as const),
+  };
+
+  const title =
+    request.customTitle ||
+    occasionDef.defaultTitle[language] ||
+    occasionDef.defaultTitle.en ||
+    occasionDef.label;
+
+  return { request, scene, title };
+}
+
+interface ShareCardPageArgs {
+  title: string;
+  occasionLabel: string;
+  recipientName?: string;
+  senderName?: string;
+  ogPath?: string;
+  pagePath: string;
+  svgContent: string;
+  ctaMeta: {
+    occasionId: OccasionId;
+    sceneId: string;
+    recipientName?: string;
+    senderName?: string;
+    language?: Language;
+  };
+}
+
+function renderShareCardHtml(args: ShareCardPageArgs): string {
+  const recipient = args.recipientName ? `for ${args.recipientName}` : '';
+  const sender = args.senderName ? `from ${args.senderName}` : '';
   const description =
-    [meta?.occasionLabel || 'Greeting', recipient, sender].filter(Boolean).join(' ').trim() ||
+    [args.occasionLabel || 'Greeting', recipient, sender].filter(Boolean).join(' ').trim() ||
     'A personalized gold-typography greeting card';
-  const ogImage = meta?.scenePreview ? `${SITE_URL}${meta.scenePreview}` : undefined;
+  const ogImage = args.ogPath ? `${SITE_URL}${args.ogPath}` : undefined;
 
-  const fontsHref =
-    "https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Anek+Bangla:wght@600;700&family=Anek+Gurmukhi:wght@600;700&family=Anek+Gujarati:wght@600;700&family=Anek+Tamil:wght@600;700&family=Anek+Telugu:wght@600;700&family=Cairo:wght@700;900&family=Cinzel:wght@700;900&family=Great+Vibes&family=Kalam:wght@400;700&family=Noto+Serif+JP:wght@600;800&family=Noto+Serif+KR:wght@600;800&family=Noto+Serif+SC:wght@600;800&family=Playfair+Display:ital,wght@0,600;0,800;1,500&family=Poppins:wght@400;600;700&family=Rasa:wght@600;700&family=Rozha+One&family=Yatra+One&display=swap";
+  const svgInline = args.svgContent.replace(/<svg /i, '<svg preserveAspectRatio="xMidYMid meet" ');
 
-  const svgInline = svg.content.replace(/<svg /i, '<svg preserveAspectRatio="xMidYMid meet" ');
-
-  const html = `<!doctype html>
+  return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${escapeHtml(title)} — GreetPrompt</title>
+<title>${escapeHtml(args.title)} — GreetPrompt</title>
 <meta name="robots" content="noindex, follow" />
 <meta property="og:type" content="article" />
-<meta property="og:title" content="${escapeHtml(title)}" />
+<meta property="og:title" content="${escapeHtml(args.title)}" />
 <meta property="og:description" content="${escapeHtml(description)}" />
 ${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}" />` : ''}
-<meta property="og:url" content="${escapeHtml(`${SITE_URL}/card/${id}`)}" />
+<meta property="og:url" content="${escapeHtml(`${SITE_URL}${args.pagePath}`)}" />
 <meta name="twitter:card" content="summary_large_image" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link rel="stylesheet" href="${fontsHref}" />
+<link rel="stylesheet" href="${SHARE_FONTS_HREF}" />
 <style>
   body { margin: 0; min-height: 100vh; background: radial-gradient(120% 90% at 50% 0%, #101625 0%, #070A10 60%); color: #E7DEF5; font-family: 'Poppins', system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 24px 16px 40px; }
   .card { width: min(92vw, 560px); }
@@ -521,12 +649,117 @@ ${ogImage ? `<meta property="og:image" content="${escapeHtml(ogImage)}" />` : ''
 </head>
 <body>
 <div class="card" id="card">${svgInline}</div>
-<a class="cta" href="${escapeHtml(appShareLink(meta || {}))}">✨ Make your own card — free</a>
+<a class="cta" href="${escapeHtml(appShareLink(args.ctaMeta))}">✨ Make your own card — free</a>
 <div class="brand">greetprompt.com</div>
 </body>
 </html>`;
+}
 
-  return c.html(html);
+function htmlResponse(html: string): Response {
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=UTF-8',
+      'Cache-Control': 'public, max-age=300',
+    },
+  });
+}
+
+// Stateless share page — the link carries the entire render state.
+app.get('/card/s/:state', async (c) => {
+  const token = c.req.param('state');
+  const input = parseShareState(token);
+  if (!input) {
+    return c.redirect(`${SITE_URL}/`, 302);
+  }
+
+  const svgContent = generateCardSvg({
+    request: input.request,
+    bgDataUrl: input.scene.previewImage || `/scenes/${input.scene.id}.jpg`,
+  });
+
+  return htmlResponse(
+    renderShareCardHtml({
+      title: input.title,
+      occasionLabel: OCCASIONS[input.request.occasion].label,
+      recipientName: input.request.recipientName,
+      senderName: input.request.senderName,
+      ogPath: input.scene.previewImage,
+      pagePath: `/card/s/${token}`,
+      svgContent,
+      ctaMeta: {
+        occasionId: input.request.occasion,
+        sceneId: input.request.sceneId,
+        recipientName: input.request.recipientName,
+        senderName: input.request.senderName,
+        language: input.request.language,
+      },
+    })
+  );
+});
+
+// Persisted-card share page — storage lookup, then deterministic re-render
+// from metadata when the cold-isolate memory cache misses (R2 unbound).
+app.get('/card/:id', async (c) => {
+  const id = c.req.param('id');
+  if (!/^wish_[0-9]+_[a-z0-9]+$/i.test(id)) {
+    return c.text('Card not found', 404);
+  }
+
+  const [meta, storedSvg] = await Promise.all([
+    getCardMeta(id, c.env),
+    getCardImage(`${id}.svg`, c.env),
+  ]);
+
+  let svgContent = storedSvg?.content;
+
+  // Cold-isolate / no-R2 storage miss: rebuild the card deterministically
+  // from the persisted metadata instead of dropping the recipient.
+  if (!svgContent && meta) {
+    const occasionId = (meta.occasionId || 'good_morning') as OccasionId;
+    const occasionDef = OCCASIONS[occasionId];
+    if (occasionDef) {
+      const scene =
+        occasionDef.scenes.find((s) => s.id === meta.sceneId) || occasionDef.scenes[0];
+      if (scene) {
+        svgContent = generateCardSvg({
+          request: {
+            occasion: occasionId,
+            sceneId: scene.id,
+            backgroundMode: 'preset' as const,
+            recipientName: meta.recipientName || undefined,
+            senderName: meta.senderName || undefined,
+            language: (meta.language || 'en') as Language,
+            aspectRatio: meta.aspectRatio === '9:16' ? ('9:16' as const) : ('4:5' as const),
+            customTitle: meta.title || undefined,
+          },
+          bgDataUrl: scene.previewImage || `/scenes/${scene.id}.jpg`,
+        });
+      }
+    }
+  }
+
+  if (!svgContent) {
+    return c.redirect(`${SITE_URL}/`, 302);
+  }
+
+  return htmlResponse(
+    renderShareCardHtml({
+      title: meta?.title || 'A Personalized Wish',
+      occasionLabel: meta?.occasionLabel || 'Greeting',
+      recipientName: meta?.recipientName,
+      senderName: meta?.senderName,
+      ogPath: meta?.scenePreview,
+      pagePath: `/card/${id}`,
+      svgContent,
+      ctaMeta: {
+        occasionId: ((meta?.occasionId as OccasionId) || 'custom'),
+        sceneId: meta?.sceneId || '',
+        recipientName: meta?.recipientName,
+        senderName: meta?.senderName,
+        language: meta?.language as Language | undefined,
+      },
+    })
+  );
 });
 
 export default app;

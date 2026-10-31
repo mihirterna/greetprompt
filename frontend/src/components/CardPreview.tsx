@@ -433,8 +433,13 @@ export const CardPreview: React.FC<CardPreviewProps> = ({
   const handleCopy = () => {
     // Prefer the /card/:id share page (rich WhatsApp unfurl + recipient CTA loop)
     // once a card has actually been generated on the server.
+    // Prefer the stateless /card/s/<state> share link when the server made
+    // one (renders the actual card without depending on card storage), then
+    // the persisted /card/:id page, then the plain app deep-link.
     let shareableUrl: string;
-    if (generatedCard) {
+    if (generatedCard?.shareStateUrl) {
+      shareableUrl = generatedCard.shareStateUrl;
+    } else if (generatedCard) {
       shareableUrl = `https://greetprompt.com/card/${generatedCard.id}`;
     } else {
       const params = new URLSearchParams();

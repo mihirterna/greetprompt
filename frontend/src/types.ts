@@ -132,6 +132,8 @@ export interface CardRequest {
 export interface CardResponse {
   id: string;
   imageUrl?: string;
+  /** Stateless, forever-alive share link (/card/s/<state>) — receivers never need server storage. */
+  shareStateUrl?: string;
   svgContent: string;
   promptUsed: string;
   occasion: OccasionId;
